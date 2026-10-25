@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="ko">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>대한민국 주요 뉴스 브리핑</title>
+        <!-- Tailwind CSS CDN -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- Phosphor Icons CDN -->
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sans: [
+                                "Pretendard",
+                                "-apple-system",
+                                "BlinkMacSystemFont",
+                                "system-ui",
+                                "Roboto",
+                                "sans-serif",
+                            ],
+                        },
+                    },
+                },
+            };
+        </script>
+        <style>
+            /* Custom sleek scrollbar for internal article lists */
+            .custom-scroll::-webkit-scrollbar {
+                width: 5px;
+            }
+            .custom-scroll::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            .custom-scroll::-webkit-scrollbar-thumb {
+                background: rgba(148, 163, 184, 0.25);
+                border-radius: 9999px;
+            }
+            .custom-scroll::-webkit-scrollbar-thumb:hover {
+                background: rgba(148, 163, 184, 0.45);
+            }
+            /* Hide scrollbar for category horizontal nav while keeping touch scroll */
+            .scrollbar-none::-webkit-scrollbar {
+                display: none;
+            }
+            .scrollbar-none {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+        </style>
+    </head>
+    <body
+        class="bg-slate-950 text-slate-100 min-h-screen antialiased font-sans flex flex-col justify-between selection:bg-sky-500/30 selection:text-sky-200"
+    >
+        <!-- Static Top Navigation Header -->
+        <header class="bg-slate-900 border-b border-slate-800">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-center justify-between gap-4">
+                <div>
+                    <h1
+                        class="text-xl sm:text-2xl font-bold tracking-tight text-white"
+                    >
+                        대한민국 주요 뉴스 브리핑
+                    </h1>
+                    <p
+                        id="todayDate"
+                        class="text-xs sm:text-sm text-slate-400 font-medium mt-1"
+                    >
+                        <!-- Date populated by script or automation placeholder -->
+                    </p>
+                </div>
+
+                <!-- Refresh Button -->
+                <button
+                    type="button"
+                    onclick="handleRefresh()"
+                    id="refreshBtn"
+                    class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm shrink-0"
+                    title="최신 데이터 다시 불러오기"
+                >
+                    <i id="refreshIcon" class="ph-bold ph-arrows-clockwise text-sm"></i>
+                    <span>새로고침</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Container -->
+        <main
+            class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-grow"
+        >
+            <!-- 1. Top Section: 오늘의 핵심 헤드라인 3선 -->
+            <section id="trendingSection" class="mb-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span
+                            class="w-8 h-8 aspect-square rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center"
+                        >
+                            <i class="ph-bold ph-trend-up text-lg"></i>
+                        </span>
+                        <h2
+                            class="text-lg sm:text-xl font-bold tracking-tight text-white"
+                        >
+                            오늘의 핵심 헤드라인 3선
+                        </h2>
+                    </div>
+                </div>
+
+                <!-- Top 3 Grid -->
+                <div
+                    id="hotNewsGrid"
+                    class="grid grid-cols-1 md:grid-cols-3 gap-5"
+                >
+                    <!-- Injected via JavaScript -->
+                </div>
+            </section>
+
+            <!-- 2. Sticky Category Bar: Positioned below top headlines -->
+            <div
+                class="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-6 bg-slate-950/95 backdrop-blur-md border-y border-slate-800/80 shadow-sm"
+            >
+                <div class="max-w-7xl mx-auto">
+                    <div class="flex items-center justify-between gap-4 mb-2">
+                        <div class="flex items-center gap-2">
+                            <span
+                                class="w-7 h-7 aspect-square rounded-md bg-sky-500/20 text-sky-400 flex items-center justify-center"
+                            >
+                                <i
+                                    class="ph-bold ph-squares-four text-base"
+                                ></i>
+                            </span>
+                            <h2
+                                id="currentCategoryTitle"
+                                class="text-sm font-bold text-white"
+                            >
+                                분야별 핵심 브리핑
+                            </h2>
+                        </div>
+                        <span
+                            id="articleCountBadge"
+                            class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700"
+                        >
+                            0건 표시 중
+                        </span>
+                    </div>
+
+                    <!-- Category Filter Buttons -->
+                    <div
+                        class="flex items-center gap-2 overflow-x-auto px-1 py-1.5 scrollbar-none"
+                        id="categoryTabs"
+                    >
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Category News Grid Section -->
+            <section>
+                <div
+                    id="newsGrid"
+                    class="grid grid-cols-1 md:grid-cols-2 gap-5"
+                >
+                    <!-- Rendered dynamically -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer
+            class="mt-16 border-t border-slate-800 bg-slate-900 py-6 text-center text-xs text-slate-400"
+        >
+            <p>
+                본 대시보드는 국내 주요 언론사의 보도 기사를 취합·구조화하여
+                브리핑 목적으로 제공합니다.
+            </p>
+            <p class="mt-1 text-slate-500">
+                각 카드의 우측 상단 버튼을 클릭하여 관련 기사 링크 리스트를
+                확인할 수 있습니다.
+            </p>
+        </footer>
+
+        <!-- Dynamic JSON Loader & Rendering Script -->
+        <script>
+            // Card Badge Styles
+            const BADGE_THEMES = {
+                blue: "bg-blue-950/60 text-blue-300 border-blue-800",
+                emerald: "bg-emerald-950/60 text-emerald-300 border-emerald-800",
+                indigo: "bg-indigo-950/60 text-indigo-300 border-indigo-800",
+                violet: "bg-violet-950/60 text-violet-300 border-violet-800",
+                orange: "bg-orange-950/60 text-orange-300 border-orange-800",
+                cyan: "bg-cyan-950/60 text-cyan-300 border-cyan-800",
+                teal: "bg-teal-950/60 text-teal-300 border-teal-800",
+                pink: "bg-pink-950/60 text-pink-300 border-pink-800",
+                rose: "bg-rose-950/60 text-rose-300 border-rose-800",
+                amber: "bg-amber-950/60 text-amber-300 border-amber-800",
+            };
+
+            // Category Tabs Active State
+            const CATEGORY_THEME_MAP = {
+                정치: {
+                    active: "bg-blue-950/60 text-blue-300 border border-blue-600/80 ring-1 ring-blue-500/40 shadow-sm",
+                },
+                "경제·금융": {
+                    active: "bg-emerald-950/60 text-emerald-300 border border-emerald-600/80 ring-1 ring-emerald-500/40 shadow-sm",
+                },
+                "산업·기업": {
+                    active: "bg-indigo-950/60 text-indigo-300 border border-indigo-600/80 ring-1 ring-indigo-500/40 shadow-sm",
+                },
+                사회: {
+                    active: "bg-violet-950/60 text-violet-300 border border-violet-600/80 ring-1 ring-violet-500/40 shadow-sm",
+                },
+                "국제·글로벌": {
+                    active: "bg-orange-950/60 text-orange-300 border border-orange-600/80 ring-1 ring-orange-500/40 shadow-sm",
+                },
+                "AI·빅테크": {
+                    active: "bg-cyan-950/60 text-cyan-300 border border-cyan-600/80 ring-1 ring-cyan-500/40 shadow-sm",
+                },
+                "IT·통신": {
+                    active: "bg-teal-950/60 text-teal-300 border border-teal-600/80 ring-1 ring-teal-500/40 shadow-sm",
+                },
+                "문화·콘텐츠": {
+                    active: "bg-pink-950/60 text-pink-300 border border-pink-600/80 ring-1 ring-pink-500/40 shadow-sm",
+                },
+                스포츠: {
+                    active: "bg-rose-950/60 text-rose-300 border border-rose-600/80 ring-1 ring-rose-500/40 shadow-sm",
+                },
+                라이프스타일: {
+                    active: "bg-amber-950/60 text-amber-300 border border-amber-600/80 ring-1 ring-amber-500/40 shadow-sm",
+                },
+            };
+
+            // Constant Configuration (Loaded from data/categories.json with embedded fallback)
+            let CATEGORY_DEFINITIONS = [
+                { id: 1, name: "정치", badgeColor: "blue", aliases: ["정치·사법"] },
+                { id: 2, name: "경제·금융", badgeColor: "emerald", aliases: ["경제", "금융"] },
+                { id: 3, name: "산업·기업", badgeColor: "indigo", aliases: ["산업", "기업"] },
+                { id: 4, name: "사회", badgeColor: "violet", aliases: ["사회·사건"] },
+                { id: 5, name: "국제·글로벌", badgeColor: "orange", aliases: ["국제", "글로벌"] },
+                { id: 6, name: "AI·빅테크", badgeColor: "cyan", aliases: ["AI", "인공지능", "빅테크"] },
+                { id: 7, name: "IT·통신", badgeColor: "teal", aliases: ["IT", "통신", "모바일"] },
+                { id: 8, name: "문화·콘텐츠", badgeColor: "pink", aliases: ["문화", "콘텐츠", "연예"] },
+                { id: 9, name: "스포츠", badgeColor: "rose", aliases: ["체육"] },
+                { id: 10, name: "라이프스타일", badgeColor: "amber", aliases: ["생활", "건강", "라이프"] },
+            ];
+            let activeCategoryId = 1;
+
+            // Dynamic Daily State (Loaded from data/latest.json)
+            let BRIEFING_DATE = null;
+            let DISPLAY_DATE = null;
+            let TOP_HEADLINES = [];
+            let NEWS_DATA = [];
+            let lastPayloadSnapshot = null;
+
+            function getCategoryDef(item) {
+                if (item && item.categoryId != null) {
+                    const match = CATEGORY_DEFINITIONS.find((c) => c.id === Number(item.categoryId));
+                    if (match) return match;
+                }
+                if (item && item.category) {
+                    const match = CATEGORY_DEFINITIONS.find(
+                        (c) => c.name === item.category || (c.aliases && c.aliases.includes(item.category)),
+                    );
+                    if (match) return match;
+                }
+                return { id: 1, name: (item && item.category) || "기타", badgeColor: "blue" };
+            }
+
+            /**
+             * =========================================================================
+             * VIEW RENDERING METHODS
+             * =========================================================================
+             */
+
+            // Helper: Format ISO date string to Korean locale string
+            function formatBriefingDate(dateVal, fallbackDisplay) {
+                if (fallbackDisplay) return fallbackDisplay;
+                if (!dateVal) return null;
+                if (typeof dateVal === "string" && dateVal.includes("년")) {
+                    return dateVal;
+                }
+                try {
+                    const d = new Date(dateVal);
+                    if (!isNaN(d.getTime())) {
+                        const options = {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                            weekday: "short",
+                        };
+                        return d.toLocaleDateString("ko-KR", options);
+                    }
+                } catch (_) {}
+                return dateVal;
+            }
+
+            // 1. Date header rendering
+            function renderDate() {
+                const dateElement = document.getElementById("todayDate");
+                if (!dateElement) return;
+                const formatted = formatBriefingDate(BRIEFING_DATE, DISPLAY_DATE);
+                if (formatted) {
+                    dateElement.innerText = `${formatted} 브리핑`;
+                } else {
+                    const now = new Date();
+                    const options = {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        weekday: "short",
+                    };
+                    dateElement.innerText = `${now.toLocaleDateString("ko-KR", options)} 브리핑`;
+                }
+            }
+
+            // 2. Card HTML Builder
+            function buildCardHTML(item) {
+                const catDef = getCategoryDef(item);
+                const badgeClass = BADGE_THEMES[catDef.badgeColor] || BADGE_THEMES.blue;
+                const linksCount = item.links ? item.links.length : 0;
+
+                const linksListHTML =
+                    item.links && item.links.length > 0
+                        ? item.links
+                              .map(
+                                  (link) => `
+            <li class="bg-slate-900 border border-slate-800 rounded-lg p-3 hover:border-sky-500 transition group shadow-sm">
+              <a
+                href="${link.url}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center justify-between text-xs text-slate-300 hover:text-sky-400"
+              >
+                <span class="truncate pr-2 font-medium">• ${link.title}</span>
+                <i class="ph ph-arrow-square-out text-slate-400 group-hover:text-sky-500 shrink-0 text-sm"></i>
+              </a>
+            </li>
+          `,
+                              )
+                              .join("")
+                        : `<li class="text-xs text-slate-400 py-6 text-center">관련 기사가 없습니다.</li>`;
+
+                return `
+        <article class="flex flex-col bg-slate-900 border border-slate-800 rounded-2xl shadow-sm hover:border-slate-700 transition duration-150 overflow-hidden h-[330px]">
+          <div class="p-5 flex-1 flex flex-col min-h-0">
+
+            <!-- Row 1: Left Tag & Right Button -->
+            <div class="flex items-center justify-between gap-2 mb-2.5 shrink-0">
+              <span class="inline-flex items-center justify-center h-[30px] px-3 rounded-lg text-xs font-semibold border ${badgeClass} shrink-0">
+                ${catDef.name}
+              </span>
+
+              <button
+                type="button"
+                onclick="toggleCardView('${item.id}')"
+                id="btn-${item.id}"
+                class="inline-flex items-center justify-center gap-1.5 h-[30px] px-3 text-xs font-semibold text-sky-400 hover:text-sky-300 bg-sky-950/60 hover:bg-sky-900/60 rounded-lg border border-sky-800 transition shrink-0 cursor-pointer"
+                title="관련 기사 / 요약 전환"
+              >
+                <span id="label-${item.id}">관련 기사 (${linksCount})</span>
+                <i id="icon-${item.id}" class="ph-bold ph-caret-down text-xs"></i>
+              </button>
+            </div>
+
+            <!-- Row 2: Headline -->
+            <h3 class="text-[15px] sm:text-base font-bold text-white leading-snug mb-3 line-clamp-2 shrink-0" title="${item.headline}">
+              ${item.headline}
+            </h3>
+
+            <!-- Row 3: Card Body -->
+            <div class="flex-1 relative overflow-hidden min-h-0">
+
+              <!-- View A: Summary & Impact -->
+              <div id="summary-view-${item.id}" class="h-full custom-scroll overflow-y-auto space-y-3.5 text-xs sm:text-sm text-slate-300 bg-slate-800/50 p-4 rounded-xl border border-slate-800/70">
+                <div>
+                  <span class="block text-xs font-bold text-sky-400 mb-1 tracking-wide">핵심</span>
+                  <p class="leading-relaxed text-slate-200">${item.summary || ""}</p>
+                </div>
+                <div>
+                  <span class="block text-xs font-bold text-amber-400 mb-1 tracking-wide">파급</span>
+                  <p class="leading-relaxed text-slate-200">${item.impact || ""}</p>
+                </div>
+              </div>
+
+              <!-- View B: Scrollable Related Articles List -->
+              <div id="articles-view-${item.id}" class="hidden h-full custom-scroll overflow-y-auto pr-1">
+                <div class="p-0.5">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">언론사별 관련 보도</span>
+                    <span class="text-[11px] text-slate-400">총 ${linksCount}건</span>
+                  </div>
+                  <ul class="space-y-2">
+                    ${linksListHTML}
+                  </ul>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </article>
+      `;
+            }
+
+            // 3. Toggle View Action
+            function toggleCardView(id) {
+                const summaryView = document.getElementById(
+                    `summary-view-${id}`,
+                );
+                const articlesView = document.getElementById(
+                    `articles-view-${id}`,
+                );
+                const icon = document.getElementById(`icon-${id}`);
+                const label = document.getElementById(`label-${id}`);
+
+                if (!summaryView || !articlesView) return;
+
+                const isShowingArticles =
+                    !articlesView.classList.contains("hidden");
+
+                if (isShowingArticles) {
+                    articlesView.classList.add("hidden");
+                    summaryView.classList.remove("hidden");
+                    icon.className = "ph-bold ph-caret-down text-xs";
+                    label.innerText = "관련 기사";
+                } else {
+                    summaryView.classList.add("hidden");
+                    articlesView.classList.remove("hidden");
+                    icon.className = "ph-bold ph-caret-up text-xs";
+                    label.innerText = "요약 보기";
+                }
+            }
+
+            // 4. Render Top 3 Section
+            function renderTopHeadlines() {
+                const container = document.getElementById("hotNewsGrid");
+                if (!container) return;
+                if (!TOP_HEADLINES || TOP_HEADLINES.length === 0) {
+                    container.innerHTML = `<div class="col-span-full py-8 text-center text-slate-500 text-sm">표시할 헤드라인이 없습니다.</div>`;
+                    return;
+                }
+                container.innerHTML = TOP_HEADLINES.map((item) =>
+                    buildCardHTML(item),
+                ).join("");
+            }
+
+            // 5. Render Category Tabs
+            function renderCategoryTabs() {
+                const container = document.getElementById("categoryTabs");
+                if (!container) return;
+                container.innerHTML = CATEGORY_DEFINITIONS.map((cat) => {
+                    const isActive = activeCategoryId === cat.id;
+                    const theme = CATEGORY_THEME_MAP[cat.name] || {
+                        active: "bg-sky-950/60 text-sky-300 border border-sky-600/80 ring-1 ring-sky-500/40 shadow-sm",
+                    };
+
+                    return `
+          <button
+            type="button"
+            onclick="selectCategory(${cat.id})"
+            class="px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all duration-150 cursor-pointer shrink-0 ${
+                isActive
+                    ? theme.active
+                    : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700"
+            }"
+          >
+            ${cat.name}
+          </button>
+        `;
+                }).join("");
+            }
+
+            // 6. Render News Grid by Category (ID-first matching)
+            function renderCategoryNews() {
+                const container = document.getElementById("newsGrid");
+                const countBadge = document.getElementById("articleCountBadge");
+                const currentCategoryTitle = document.getElementById(
+                    "currentCategoryTitle",
+                );
+
+                const activeDef =
+                    CATEGORY_DEFINITIONS.find((c) => c.id === activeCategoryId) ||
+                    CATEGORY_DEFINITIONS[0];
+
+                if (currentCategoryTitle) {
+                    currentCategoryTitle.innerText = `${activeDef.name} 브리핑`;
+                }
+
+                const filtered = NEWS_DATA.filter((item) => {
+                    if (item.categoryId != null) {
+                        return Number(item.categoryId) === activeDef.id;
+                    }
+                    const matchingNames = [activeDef.name, ...(activeDef.aliases || [])];
+                    return matchingNames.includes(item.category);
+                });
+
+                if (countBadge) {
+                    countBadge.innerText = `${filtered.length}건 표시 중`;
+                }
+
+                if (!container) return;
+                if (filtered.length === 0) {
+                    container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500 text-sm">해당 분야의 등록된 기사가 없습니다.</div>`;
+                    return;
+                }
+
+                container.innerHTML = filtered
+                    .map((item) => buildCardHTML(item))
+                    .join("");
+            }
+
+            // 7. Tab Selection Event
+            function selectCategory(catId) {
+                activeCategoryId = Number(catId);
+                renderCategoryTabs();
+                renderCategoryNews();
+            }
+
+            // 8. Render All Views
+            function renderAll() {
+                renderDate();
+                renderTopHeadlines();
+                renderCategoryTabs();
+                renderCategoryNews();
+            }
+
+            // 9. Error Handler View
+            function renderError(err) {
+                const isFileProtocol = window.location.protocol === "file:";
+                const message = isFileProtocol
+                    ? "로컬 파일(file://) 환경에서는 브라우저 보안 정책으로 JSON 로드가 차단될 수 있습니다.<br>로컬 웹 서버(예: <code>npx serve .</code> 또는 <code>python3 -m http.server</code>)를 통해 열어주세요."
+                    : "최신 브리핑 데이터를 불러오지 못했습니다. <code>data/latest.json</code> 파일을 확인해주세요.";
+
+                const errorBox = `
+                    <div class="col-span-full bg-slate-900 border border-rose-900/40 rounded-2xl p-6 text-center text-slate-300">
+                        <i class="ph ph-warning-circle text-2xl text-rose-400 mb-2 inline-block"></i>
+                        <p class="font-bold text-sm text-rose-300 mb-1">데이터 로딩 안내</p>
+                        <p class="text-xs text-slate-400 leading-relaxed">${message}</p>
+                    </div>
+                `;
+
+                const hotNews = document.getElementById("hotNewsGrid");
+                const newsGrid = document.getElementById("newsGrid");
+                if (hotNews) hotNews.innerHTML = errorBox;
+                if (newsGrid) newsGrid.innerHTML = errorBox;
+            }
+
+            // 10. Load News Data from Separated Configuration & Daily Data
+            async function fetchWithCacheBust(url) {
+                const busterUrl = `${url}?_t=${Date.now()}`;
+                const response = await fetch(busterUrl, { cache: "no-cache" });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText} (${url})`);
+                }
+                return await response.json();
+            }
+
+            async function loadCategories() {
+                try {
+                    const data = await fetchWithCacheBust("data/categories.json");
+                    if (Array.isArray(data.categories) && data.categories.length > 0) {
+                        CATEGORY_DEFINITIONS = data.categories;
+                        if (!CATEGORY_DEFINITIONS.some((c) => c.id === activeCategoryId)) {
+                            activeCategoryId = CATEGORY_DEFINITIONS[0].id;
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Using embedded categories fallback:", e);
+                }
+            }
+
+            async function fetchLatestData() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const dateParam = urlParams.get("date");
+                const targetUrl = dateParam ? `data/${dateParam}.json` : "data/latest.json";
+                return await fetchWithCacheBust(targetUrl);
+            }
+
+            function applyNewsPayload(data) {
+                BRIEFING_DATE = data.briefingDate || data.briefing_date || null;
+                TOP_HEADLINES = data.topHeadlines || data.top_headlines || [];
+                NEWS_DATA = data.articles || data.newsData || [];
+
+                if (!CATEGORY_DEFINITIONS.some((c) => c.id === activeCategoryId)) {
+                    activeCategoryId = CATEGORY_DEFINITIONS[0].id;
+                }
+            }
+
+            async function loadNewsData() {
+                try {
+                    await loadCategories();
+                    const data = await fetchLatestData();
+                    applyNewsPayload(data);
+                    lastPayloadSnapshot = JSON.stringify(data);
+                    renderAll();
+                } catch (error) {
+                    console.error("Failed to load news payload:", error);
+                    renderError(error);
+                }
+            }
+
+            // 11. Toast Notification System
+            function showToast(message, type = "info") {
+                const container = document.getElementById("toastContainer");
+                if (!container) return;
+
+                const toast = document.createElement("div");
+                const styles = {
+                    success: "bg-emerald-950/90 text-emerald-200 border-emerald-600/80 shadow-emerald-950/60 ring-1 ring-emerald-500/30",
+                    error: "bg-rose-950/90 text-rose-200 border-rose-600/80 shadow-rose-950/60 ring-1 ring-rose-500/30",
+                    info: "bg-slate-900/95 text-slate-200 border-slate-700/80 shadow-slate-950/60 ring-1 ring-slate-600/30",
+                };
+                const icons = {
+                    success: "ph-bold ph-check-circle text-emerald-400",
+                    error: "ph-bold ph-warning-circle text-rose-400",
+                    info: "ph-bold ph-info text-sky-400",
+                };
+
+                const styleClass = styles[type] || styles.info;
+                const iconClass = icons[type] || icons.info;
+
+                toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-2.5 rounded-xl border ${styleClass} text-xs sm:text-sm font-medium shadow-xl backdrop-blur-md transition-all duration-300 opacity-0 translate-y-3`;
+                toast.innerHTML = `
+                    <i class="${iconClass} text-base shrink-0"></i>
+                    <span>${message}</span>
+                `;
+
+                container.appendChild(toast);
+
+                requestAnimationFrame(() => {
+                    toast.classList.remove("opacity-0", "translate-y-3");
+                });
+
+                setTimeout(() => {
+                    toast.classList.add("opacity-0", "translate-y-3");
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+
+            // 12. Manual Refresh Action
+            async function handleRefresh() {
+                const btn = document.getElementById("refreshBtn");
+                const icon = document.getElementById("refreshIcon");
+
+                if (btn) btn.disabled = true;
+                if (icon) icon.classList.add("animate-spin");
+
+                try {
+                    const data = await fetchLatestData();
+                    const newSnapshot = JSON.stringify(data);
+                    const isChanged = lastPayloadSnapshot !== null && lastPayloadSnapshot !== newSnapshot;
+
+                    applyNewsPayload(data);
+
+                    if (isChanged || lastPayloadSnapshot === null) {
+                        lastPayloadSnapshot = newSnapshot;
+                        renderAll();
+                        showToast("최신 브리핑 데이터로 갱신되었습니다.", "success");
+                    } else {
+                        showToast("새로운 변경 사항이 없습니다. (최신 상태 유지 중)", "info");
+                    }
+                } catch (err) {
+                    console.error("Refresh failed:", err);
+                    showToast("데이터 갱신에 실패했습니다. 최신 파일을 확인해주세요.", "error");
+                } finally {
+                    if (btn) btn.disabled = false;
+                    if (icon) icon.classList.remove("animate-spin");
+                }
+            }
+
+            // Lifecycle Hook
+            window.onload = loadNewsData;
+        </script>
+
+        <!-- Toast Notification Container (Bottom Centered) -->
+        <div
+            id="toastContainer"
+            class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none transition-all duration-300"
+        ></div>
+    </body>
+</html>
