@@ -269,45 +269,30 @@
              * =========================================================================
              */
 
-            // Helper: Format ISO date string to Korean locale string
-            function formatBriefingDate(dateVal, fallbackDisplay) {
-                if (fallbackDisplay) return fallbackDisplay;
-                if (!dateVal) return null;
-                if (typeof dateVal === "string" && dateVal.includes("년")) {
-                    return dateVal;
+            // Helper: Format ISO date string to "마지막 갱신: yyyy년 mm월 dd일 hh시 MM분"
+            function formatLastUpdated(dateVal) {
+                let d = null;
+                if (dateVal) {
+                    d = new Date(dateVal);
                 }
-                try {
-                    const d = new Date(dateVal);
-                    if (!isNaN(d.getTime())) {
-                        const options = {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                            weekday: "short",
-                        };
-                        return d.toLocaleDateString("ko-KR", options);
-                    }
-                } catch (_) {}
-                return dateVal;
+                if (!d || isNaN(d.getTime())) {
+                    d = new Date();
+                }
+
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, "0");
+                const day = String(d.getDate()).padStart(2, "0");
+                const hours = String(d.getHours()).padStart(2, "0");
+                const minutes = String(d.getMinutes()).padStart(2, "0");
+
+                return `마지막 갱신: ${year}년 ${month}월 ${day}일 ${hours}시 ${minutes}분`;
             }
 
             // 1. Date header rendering
             function renderDate() {
                 const dateElement = document.getElementById("todayDate");
                 if (!dateElement) return;
-                const formatted = formatBriefingDate(BRIEFING_DATE, DISPLAY_DATE);
-                if (formatted) {
-                    dateElement.innerText = `${formatted} 브리핑`;
-                } else {
-                    const now = new Date();
-                    const options = {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                        weekday: "short",
-                    };
-                    dateElement.innerText = `${now.toLocaleDateString("ko-KR", options)} 브리핑`;
-                }
+                dateElement.innerText = formatLastUpdated(BRIEFING_DATE);
             }
 
             // 2. Card HTML Builder
