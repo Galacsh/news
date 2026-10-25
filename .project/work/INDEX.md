@@ -10,3 +10,4 @@
 | [SLICE-0006](SLICE-0006-pipeline-monitoring-dashboard.md) | Pipeline telemetry & monitoring dashboard | proposed | [REQ-0002](../requirements/REQ-0002-briefing-platform-enhancements.md) | Blocked on SLICE-0005 |
 | [SLICE-0007](SLICE-0007-notice-center-unread-badge.md) | Notice center with 7-day unread badge | proposed | [REQ-0002](../requirements/REQ-0002-briefing-platform-enhancements.md) | Ready to specify |
 | [SLICE-0008](SLICE-0008-archive-explorer-calendar.md) | Historical briefing archive explorer & calendar | proposed | [REQ-0002](../requirements/REQ-0002-briefing-platform-enhancements.md) | Ready to specify |
+| [SLICE-0009](SLICE-0009-daum-news-crawler.md) | Daum News scraper & major news extractor | completed | [REQ-0003](../requirements/REQ-0003-daum-news-crawler.md) | Ready for closure |
