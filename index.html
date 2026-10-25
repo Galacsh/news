@@ -71,16 +71,16 @@
                     </p>
                 </div>
 
-                <!-- Refresh Button -->
+                <!-- Refresh Button (Icon Only) -->
                 <button
                     type="button"
                     onclick="handleRefresh()"
                     id="refreshBtn"
-                    class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm shrink-0"
+                    class="w-9 h-9 aspect-square inline-flex items-center justify-center text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm shrink-0"
                     title="최신 데이터 다시 불러오기"
+                    aria-label="최신 데이터 다시 불러오기"
                 >
-                    <i id="refreshIcon" class="ph-bold ph-arrows-clockwise text-sm"></i>
-                    <span>새로고침</span>
+                    <i id="refreshIcon" class="ph-bold ph-arrows-clockwise text-base"></i>
                 </button>
             </div>
         </header>
@@ -140,7 +140,7 @@
                             id="articleCountBadge"
                             class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700"
                         >
-                            0건 표시 중
+                            0건
                         </span>
                     </div>
 
@@ -167,15 +167,13 @@
 
         <!-- Footer -->
         <footer
-            class="mt-16 border-t border-slate-800 bg-slate-900 py-6 text-center text-xs text-slate-400"
+            class="mt-16 border-t border-slate-800 bg-slate-900 py-6 text-center text-xs text-slate-500"
         >
             <p>
-                본 대시보드는 국내 주요 언론사의 보도 기사를 취합·구조화하여
-                브리핑 목적으로 제공합니다.
+                본 브리핑은 AI 및 자동화 프로그램을 통해 수집·요약된 내용으로 일부 부정확한 정보가 포함될 수 있습니다.
             </p>
-            <p class="mt-1 text-slate-500">
-                각 카드의 우측 상단 버튼을 클릭하여 관련 기사 링크 리스트를
-                확인할 수 있습니다.
+            <p class="mt-1 text-slate-600">
+                정확한 사실 확인은 각 카드의 원문 기사를 참고하시기 바랍니다.
             </p>
         </footer>
 
@@ -330,7 +328,7 @@
                 rel="noopener noreferrer"
                 class="flex items-center justify-between text-xs text-slate-300 hover:text-sky-400"
               >
-                <span class="truncate pr-2 font-medium">• ${link.title}</span>
+                <span class="truncate pr-2 font-medium">${link.title}</span>
                 <i class="ph ph-arrow-square-out text-slate-400 group-hover:text-sky-500 shrink-0 text-sm"></i>
               </a>
             </li>
@@ -493,7 +491,7 @@
                 });
 
                 if (countBadge) {
-                    countBadge.innerText = `${filtered.length}건 표시 중`;
+                    countBadge.innerText = `${filtered.length}건`;
                 }
 
                 if (!container) return;
