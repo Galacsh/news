@@ -24,11 +24,12 @@ from src.llm.prompts import (
 # ============================================================================
 
 def test_system_prompt_specifications():
-    """Verify system prompt contains essential journalistic and schema rules."""
+    """Verify system prompt contains essential journalistic, schema, and speech-style rules."""
     assert "Editor-in-Chief" in SYSTEM_PROMPT
     assert "Korean" in SYSTEM_PROMPT
     assert "핵심" in SYSTEM_PROMPT
     assert "파급" in SYSTEM_PROMPT
+    assert "해요체" in SYSTEM_PROMPT
     assert "bullet points" in SYSTEM_PROMPT
     assert "JSON" in SYSTEM_PROMPT
 

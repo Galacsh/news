@@ -73,6 +73,7 @@ Deliver an automated daily briefing website of major Korean news published to Gi
 ### 3.5 LLM Summarization & Delivery (Slices 2 & 4)
 - **R-LLM-01**: Synthesize categorized news into Top 3 headlines and category briefings with "핵심" (Summary) and "파급" (Impact) using Gemini API free tier.
 - **R-LLM-02 (Prompt Language Optimization)**: Prompt instructions, system persona, and JSON schema descriptions written in English for optimal instruction-following and reasoning, with strict mandates enforcing that all generated narrative text (`headline`, `summary` [핵심], `impact` [파급]) is in natural, professional Korean (한국어).
+- **R-LLM-03 (Haeyo-che Tone Mandate)**: Core summary (`summary` [핵심]) and impact (`impact` [파급]) must strictly be written in polite informal Korean ("해요체", e.g., ~해요, ~돼요, ~전망이에요) for friendly, readable daily briefing. Strictly forbid formal 하십시오체 (~합니다) or 해라체 (~한다).
 - **R-CI-01**: GitHub Actions workflow running on a daily cron at 07:00 KST (22:00 UTC) and manual dispatch, synthesizing the past 24 hours of news, committing new daily JSON and deploying to GitHub Pages.
 
 ## 4. Verification & Constraints

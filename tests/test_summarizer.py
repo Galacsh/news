@@ -419,3 +419,20 @@ def test_extract_fallback_briefing_directly(sample_articles: list[Article]):
         assert "links" in item
         assert isinstance(item["links"], list)
         assert len(item["links"]) > 0
+
+
+def test_sanitize_links_rejects_search_engine_queries(sample_articles: list[Article]):
+    """Verify _sanitize_links filters out search engine query URLs and falls back to candidate URLs."""
+    summarizer = NewsSummarizer()
+    cat_links = {1: [{"title": "진짜 기사", "url": "https://www.yna.co.kr/view/123"}]}
+    all_links = [{"title": "진짜 기사", "url": "https://www.yna.co.kr/view/123"}]
+
+    polluted_links = [
+        {"title": "네이버 검색", "url": "https://search.naver.com/search.naver?query=test"},
+        {"title": "다음 검색", "url": "https://search.daum.net/search?q=test"},
+        {"title": "구글 검색", "url": "https://www.google.com/search?q=test"},
+    ]
+
+    cleaned = summarizer._sanitize_links(polluted_links, cat_id=1, cat_links=cat_links, all_links=all_links)
+    assert len(cleaned) == 1
+    assert cleaned[0]["url"] == "https://www.yna.co.kr/view/123"

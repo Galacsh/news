@@ -168,7 +168,7 @@ class NewsSummarizer:
                     "categoryId": cat_id,
                     "headline": art.title,
                     "summary": art.summary or f"{art.outlet or '주요 언론'} 보도: {art.title}",
-                    "impact": "해당 이슈가 사회 및 관련 산업 전반에 미치는 파급 효과에 대한 주목이 이어지고 있습니다.",
+                    "impact": "해당 이슈가 사회 및 관련 산업 전반에 미치는 파급 효과에 주목이 쏠리고 있어요.",
                     "links": [
                         {
                             "title": f"{art.outlet} - {art.title}" if art.outlet else art.title,
@@ -190,7 +190,7 @@ class NewsSummarizer:
                             "categoryId": cat_id,
                             "headline": art.title,
                             "summary": art.summary or f"{art.outlet or '주요 언론'} 보도: {art.title}",
-                            "impact": "관련 정책 및 시장 환경 변화에 지속적인 영향이 예상됩니다.",
+                            "impact": "관련 정책 및 시장 환경 변화에 지속적인 영향이 예상돼요.",
                             "links": [
                                 {
                                     "title": f"{art.outlet} - {art.title}" if art.outlet else art.title,
@@ -211,7 +211,7 @@ class NewsSummarizer:
                     "categoryId": cat_id,
                     "headline": art.title,
                     "summary": art.summary or f"{art.outlet or '언론사'} 보도: {art.title}",
-                    "impact": "업계 동향 및 관련 시장 지표에 미치는 영향을 주시하고 있습니다.",
+                    "impact": "업계 동향 및 관련 시장 지표에 미치는 영향을 주시하고 있어요.",
                     "links": [
                         {
                             "title": f"{art.outlet} - {art.title}" if art.outlet else art.title,
@@ -334,14 +334,19 @@ class NewsSummarizer:
         cat_links: dict[int, list[dict[str, str]]],
         all_links: list[dict[str, str]],
     ) -> list[dict[str, str]]:
-        """Ensure links is a non-empty list of {title, url} dicts."""
+        """Ensure links is a non-empty list of {title, url} dicts, rejecting search query URLs."""
+        search_domains = ("search.naver.com", "search.daum.net", "google.com/search")
         sanitized: list[dict[str, str]] = []
         if isinstance(links, list):
             for l in links:
                 if isinstance(l, dict) and l.get("url"):
+                    raw_url = str(l["url"]).strip()
+                    # Strictly discard search engine query URLs
+                    if any(domain in raw_url for domain in search_domains):
+                        continue
                     sanitized.append({
                         "title": str(l.get("title", "")).strip() or "원문 기사",
-                        "url": str(l["url"]).strip(),
+                        "url": raw_url,
                     })
 
         if sanitized:

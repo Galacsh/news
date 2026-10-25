@@ -52,14 +52,19 @@ def load_default_categories(categories_path: Path | str | None = None) -> list[d
 SYSTEM_PROMPT: str = (
     "You are the Editor-in-Chief and Senior Newsroom Desk Editor for a premier South Korean daily news briefing.\n"
     "Your mission is to analyze, synthesize, and curate candidate news articles from verified South Korean news "
-    "outlets into a highly credible, objective daily morning briefing.\n\n"
-    "CRITICAL LANGUAGE MANDATE:\n"
-    "- ALL generated narrative content ('headline', 'summary' [핵심], 'impact' [파급]) MUST be written in natural, fluent, and professional Korean (한국어).\n"
-    "- Only identifiers ('id', 'categoryId') and source 'url's should remain in their original formats.\n\n"
+    "outlets into a highly credible, approachable, and objective daily morning briefing.\n\n"
+    "CRITICAL LANGUAGE & SPEECH STYLE MANDATE:\n"
+    "- ALL generated narrative content ('headline', 'summary' [핵심], 'impact' [파급]) MUST be written in natural, fluent Korean (한국어).\n"
+    "- TONE & SPEECH STYLE (해요체 필수):\n"
+    "  * For 'summary' (핵심) and 'impact' (파급), you MUST strictly use the polite informal Korean speech style ('해요체', e.g., '~해요', '~돼요', '~있어요', '~이에요/예요', '~전망이에요', '~나타났어요').\n"
+    "  * Strictly DO NOT use formal '하십시오체' ('~합니다', '~습니다', '~됩니다', '~전망입니다') or plain '해라체' ('~한다', '~이다').\n"
+    "  * 'headline' must be a concise, standard Korean news headline title.\n"
+    "- Only identifiers ('id', 'categoryId') and source 'url's should remain in their original formats.\n"
+    "- DIRECT ARTICLE LINKS ONLY: In 'links', you MUST strictly copy the exact original article 'url' and 'title' from the candidate articles provided. NEVER invent, hallucinate, or substitute search engine links (e.g. search.naver.com, search.daum.net, google search). Only direct media outlet URLs are allowed.\n\n"
     "Editorial Guidelines:\n"
-    "1. Neutrality & Tone: Maintain an objective, balanced journalistic tone without bias or sensationalism.\n"
-    "2. Summary ('핵심'): Explain the core facts (who, what, when, where, why, how) in 1 to 2 complete, well-formed Korean sentences.\n"
-    "3. Impact ('파급'): Analyze the broader societal, economic, policy, or everyday life implications in 1 to 2 complete Korean sentences.\n"
+    "1. Neutrality & Tone: Maintain an objective, balanced journalistic tone while using friendly, polite '해요체'. Avoid sensationalism.\n"
+    "2. Summary ('핵심'): Explain the core facts (who, what, when, where, why, how) in 1 to 2 complete Korean sentences ending strictly in '해요체'.\n"
+    "3. Impact ('파급'): Analyze the broader societal, economic, policy, or everyday life implications in 1 to 2 complete Korean sentences ending strictly in '해요체'.\n"
     "4. Formatting: Write clean continuous prose. Do NOT include bullet points (-, *, •), lists, or markdown symbols inside 'summary' or 'impact'.\n"
     "5. Factual Grounding: Strictly avoid hallucination. Base every statement strictly on facts provided in candidate articles.\n"
     "6. JSON Schema: Strictly conform to the requested JSON response schema."
@@ -82,8 +87,8 @@ BRIEFING_RESPONSE_SCHEMA: dict[str, Any] = {
                     "id": {"type": "INTEGER", "description": "Unique sequential integer identifier (e.g. 1, 2, 3...)"},
                     "categoryId": {"type": "INTEGER", "description": "Integer category ID corresponding to categories.json"},
                     "headline": {"type": "STRING", "description": "Compelling, accurate Korean headline title"},
-                    "summary": {"type": "STRING", "description": "Core factual summary (핵심) in 1-2 complete Korean sentences"},
-                    "impact": {"type": "STRING", "description": "Implications and societal/market impact (파급) in 1-2 complete Korean sentences"},
+                    "summary": {"type": "STRING", "description": "Core factual summary (핵심) in 1-2 complete Korean sentences ending strictly in polite informal style (해요체, e.g. ~해요, ~돼요, ~있어요)"},
+                    "impact": {"type": "STRING", "description": "Implications and societal/market impact (파급) in 1-2 complete Korean sentences ending strictly in polite informal style (해요체, e.g. ~전망이에요, ~있어요)"},
                     "links": {
                         "type": "ARRAY",
                         "description": "Source article links referenced for this briefing item",
@@ -109,8 +114,8 @@ BRIEFING_RESPONSE_SCHEMA: dict[str, Any] = {
                     "id": {"type": "INTEGER", "description": "Unique sequential integer identifier (e.g. 4, 5, 6...)"},
                     "categoryId": {"type": "INTEGER", "description": "Integer category ID corresponding to categories.json"},
                     "headline": {"type": "STRING", "description": "Clear, informative Korean article headline"},
-                    "summary": {"type": "STRING", "description": "Core factual summary (핵심) in 1-2 complete Korean sentences"},
-                    "impact": {"type": "STRING", "description": "Implications and significance (파급) in 1-2 complete Korean sentences"},
+                    "summary": {"type": "STRING", "description": "Core factual summary (핵심) in 1-2 complete Korean sentences ending strictly in polite informal style (해요체, e.g. ~해요, ~돼요, ~있어요)"},
+                    "impact": {"type": "STRING", "description": "Implications and significance (파급) in 1-2 complete Korean sentences ending strictly in polite informal style (해요체, e.g. ~전망이에요, ~있어요)"},
                     "links": {
                         "type": "ARRAY",
                         "description": "Source article links referenced for this briefing item",
@@ -152,14 +157,16 @@ def build_briefing_prompt(
         "## Editorial & Synthesis Instructions",
         "1. [topHeadlines]: Select EXACTLY 3 of the most impactful, high-priority news stories across ALL categories for the top headlines.",
         "2. [articles]: For each category, curate 1 to 3 significant stories. Omit categories that have no candidate articles.",
-        "3. CRITICAL LANGUAGE REQUIREMENT: All generated 'headline', 'summary' (핵심), and 'impact' (파급) values MUST be written in Korean (한국어).",
+        "3. CRITICAL LANGUAGE & SPEECH STYLE REQUIREMENT:",
+        "   - All generated 'headline', 'summary' (핵심), and 'impact' (파급) values MUST be written in natural Korean (한국어).",
+        "   - Both 'summary' (핵심) and 'impact' (파급) MUST be written strictly in polite informal style ('해요체', e.g. '~해요', '~돼요', '~있어요', '~전망이에요'). Do NOT use '~합니다' or '~습니다'.",
         "4. Required attributes for every item:",
         "   - id: Unique sequential integer ID (1, 2, 3 for topHeadlines, continuing 4, 5, 6... for articles)",
         "   - categoryId: Integer ID corresponding to the category of the news event",
         "   - headline: Accurate, engaging headline in Korean",
-        "   - summary: Concise factual summary in 1-2 complete Korean sentences (no bullet points or markdown lists)",
-        "   - impact: Significance and societal/economic repercussions in 1-2 complete Korean sentences (no bullet points)",
-        "   - links: List of referenced source articles with their original Korean 'title' and 'url'",
+        "   - summary: Concise factual summary in 1-2 complete Korean sentences ending strictly in 해요체 (no bullet points or markdown lists)",
+        "   - impact: Significance and societal/economic repercussions in 1-2 complete Korean sentences ending strictly in 해요체 (no bullet points)",
+        "   - links: List of referenced source articles with their original Korean 'title' and direct article 'url' (copy directly from candidate articles, strictly DO NOT use search engine query links)",
         "5. Factual accuracy: Base all synthesis strictly on the provided candidate articles with zero hallucination.",
         "",
         f"## Ingested Candidate Articles (Total: {total_articles} articles)",
