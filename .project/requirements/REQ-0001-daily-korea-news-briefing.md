@@ -50,10 +50,12 @@ Deliver an automated daily briefing website of major Korean news published to Gi
 ### 3.4 Client Dashboard UI (`index.html`)
 - **R-UI-01 (Dynamic JSON Rendering)**:
   - Converted from `sample.html` into a dynamic client-side SPA rendering Top 3 headlines, category tabs, and news cards with related article toggles.
-- **R-UI-02 (Header Cleanliness)**:
+- **R-UI-02 (Header & Footer Cleanliness)**:
   - Removed `"종합 관심도 기준"` subtext from the Top 3 section header.
+  - Category count badge simplified to `"N건"`.
+  - Footer simplified to a concise disclaimer noting that AI-automated briefing summaries may contain inaccuracies and advising users to verify with original article links.
 - **R-UI-03 (Manual Refresh & Cache Busting)**:
-  - Header refresh button triggers data reload.
+  - Header refresh button: sleek icon-only button (`w-9 h-9`) triggering data reload with rotation animation and accessible aria-label.
   - All JSON fetches employ cache-busting query parameter `?_t=${Date.now()}` and `{ cache: "no-cache" }` to prevent stale GitHub Pages / CDN caching.
 - **R-UI-04 (Toast Notification & Change Detection)**:
   - Bottom-centered toast notification system.
