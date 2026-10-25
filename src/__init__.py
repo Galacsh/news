@@ -1,0 +1,1 @@
+"""News briefing source package."""
