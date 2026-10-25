@@ -24,6 +24,8 @@ Deliver an automated daily briefing website of major Korean news published to Gi
   - All category references across `data/latest.json` and `data/feeds.json` must map via integer `categoryId` foreign key rather than literal category name strings.
 - **R-DATA-03 (ISO Date Standard)**:
   - `briefingDate` in `data/latest.json` must use standard ISO 8601 formatting (`YYYY-MM-DDTHH:mm:ss+09:00` or `YYYY-MM-DD`). The client UI formats this to Korean locale text.
+- **R-DATA-04 (Article Sequential Numbering)**:
+  - All articles across `topHeadlines` (1..3) and category `articles` (4..N) must use sequential 1-based integers for their `id` property instead of arbitrary prefix strings (`top-`, `art-`, `pol-`), ensuring unique DOM element targeting and clean schema serialization.
 
 ### 3.2 RSS Feed Ingestion & Curation
 - **R-FEED-01 (Candidate Pool & Deduplication)**:
@@ -43,7 +45,7 @@ Deliver an automated daily briefing website of major Korean news published to Gi
 - **R-ART-01 (Article Deduplication)**:
   - Deduplicate articles by normalized tracking-free URL (pruning UTM parameters) and fuzzy title similarity (`difflib.SequenceMatcher >= 0.8`).
 - **R-ART-02 (Recency Filtering)**:
-  - Retain only articles published within the last 24–48 hours, handling arbitrary timezones.
+  - Retain only articles published within the last 24 hours relative to execution time (`max_hours=24.0`), handling arbitrary timezones.
 - **R-ART-03 (Per-Category Quota Limits)**:
   - Sort articles descending by publication date and retain top N (default 5) per category to prevent token overflow for downstream Gemini synthesis.
 
@@ -51,6 +53,7 @@ Deliver an automated daily briefing website of major Korean news published to Gi
 - **R-UI-01 (Dynamic JSON Rendering)**:
   - Converted from `sample.html` into a dynamic client-side SPA rendering Top 3 headlines, category tabs, and news cards with related article toggles.
 - **R-UI-02 (Header & Footer Cleanliness)**:
+  - Header briefing date format standardized to `"마지막 갱신: yyyy년 mm월 dd일 hh시 MM분"` replacing `"날짜 일 브리핑"`.
   - Removed `"종합 관심도 기준"` subtext from the Top 3 section header.
   - Category count badge simplified to `"N건"`.
   - Footer simplified to a concise disclaimer noting that AI-automated briefing summaries may contain inaccuracies and advising users to verify with original article links.
@@ -65,7 +68,8 @@ Deliver an automated daily briefing website of major Korean news published to Gi
 
 ### 3.5 LLM Summarization & Delivery (Slices 2 & 4)
 - **R-LLM-01**: Synthesize categorized news into Top 3 headlines and category briefings with "핵심" (Summary) and "파급" (Impact) using Gemini API free tier.
-- **R-CI-01**: GitHub Actions workflow running on a daily cron (e.g. 06:30 KST) and manual dispatch, committing new daily JSON and deploying to GitHub Pages.
+- **R-LLM-02 (Prompt Language Optimization)**: Prompt instructions, system persona, and JSON schema descriptions written in English for optimal instruction-following and reasoning, with strict mandates enforcing that all generated narrative text (`headline`, `summary` [핵심], `impact` [파급]) is in natural, professional Korean (한국어).
+- **R-CI-01**: GitHub Actions workflow running on a daily cron at 07:00 KST (22:00 UTC) and manual dispatch, synthesizing the past 24 hours of news, committing new daily JSON and deploying to GitHub Pages.
 
 ## 4. Verification & Constraints
 - Unit test suite enforcing parsing, filtering, feed catalog serialization, and fallback coverage.
