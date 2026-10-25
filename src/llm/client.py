@@ -45,22 +45,22 @@ class GeminiAPIError(Exception):
 class GeminiClient:
     """Google Gemini client powered by official google-genai SDK."""
 
-    DEFAULT_MODEL: str = "gemini-2.0-flash"
-    DEFAULT_TIMEOUT: float = 30.0
+    DEFAULT_MODEL: str = "gemini-3.5-flash"
+    DEFAULT_TIMEOUT: float = 90.0
     DEFAULT_MAX_RETRIES: int = 3
     DEFAULT_BASE_BACKOFF: float = 2.0
 
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = DEFAULT_MODEL,
+        model: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         base_backoff: float = DEFAULT_BASE_BACKOFF,
         dry_run: bool = False,
         mock_mode: bool = False,
     ) -> None:
-        self.model = model
+        self.model = model or os.environ.get("GEMINI_MODEL", self.DEFAULT_MODEL)
         self.timeout = timeout
         self.max_retries = max_retries
         self.base_backoff = base_backoff

@@ -133,8 +133,8 @@ def test_gemini_client_initialization_defaults(monkeypatch: pytest.MonkeyPatch):
 
     client = GeminiClient()
     assert client.api_key == "env-secret-key-1234"
-    assert client.model == "gemini-2.0-flash"
-    assert client.timeout == 30.0
+    assert client.model == "gemini-3.5-flash"
+    assert client.timeout == 90.0
     assert client.max_retries == 3
     assert client.base_backoff == 2.0
     assert not client.is_mock()
