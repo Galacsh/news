@@ -14,6 +14,7 @@ import pytest
 
 from src.ingest.filter import (
     ArticleFilterPipeline,
+    apply_adaptive_lookback,
     deduplicate_articles,
     filter_by_recency,
     group_and_trim_by_category,
@@ -673,3 +674,387 @@ def test_load_feed_sources_missing_fallback(tmp_path: Path):
 
     sources = load_feed_sources(tmp_path / "nonexistent_feeds.json")
     assert len(sources) >= 10
+
+
+# ============================================================================
+# 11. Adaptive Category Lookback Unit Tests
+# ============================================================================
+
+
+def test_adaptive_lookback_sufficient_recent_no_fallback():
+    """Verify category with >= min_per_category recent articles uses standard window with no fallback."""
+    ref_time = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    pipeline = ArticleFilterPipeline(
+        categories=["정치"],
+        max_hours=24.0,
+        max_lookback_hours=72.0,
+        min_per_category=2,
+        adaptive_lookback=True,
+        reference_time=ref_time,
+    )
+
+    articles = [
+        Article(
+            id="p-1",
+            title="여야 원내대표 정기국회 일정 전격 합의",
+            summary="",
+            url="https://news.com/p1",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=2)).isoformat(),
+            category="정치",
+        ),
+        Article(
+            id="p-2",
+            title="정부 신규 민생 경제 대책 국무회의 의결",
+            summary="",
+            url="https://news.com/p2",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=4)).isoformat(),
+            category="정치",
+        ),
+        Article(
+            id="p-3",
+            title="대통령실 신임 수석비서관 임명 단행",
+            summary="",
+            url="https://news.com/p3",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=6)).isoformat(),
+            category="정치",
+        ),
+        Article(
+            id="p-old-1",
+            title="국회 예결위 내년도 예산안 종합 심사 돌입",
+            summary="",
+            url="https://news.com/p_old1",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=35)).isoformat(),
+            category="정치",
+        ),
+        Article(
+            id="p-old-2",
+            title="중앙선관위 재보궐선거 투표율 잠정 집계 발표",
+            summary="",
+            url="https://news.com/p_old2",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=50)).isoformat(),
+            category="정치",
+        ),
+    ]
+
+    grouped = pipeline.process(articles)
+    assert len(grouped["정치"]) == 3
+    assert [a.id for a in grouped["정치"]] == ["p-1", "p-2", "p-3"]
+
+
+def test_adaptive_lookback_backfills_deficient_categories():
+    """Verify deficient categories (0 or 1 recent) backfill from 72h window up to min_per_category."""
+    ref_time = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    pipeline = ArticleFilterPipeline(
+        categories=["AI·빅테크", "문화·콘텐츠"],
+        max_hours=24.0,
+        max_lookback_hours=72.0,
+        min_per_category=2,
+        adaptive_lookback=True,
+        reference_time=ref_time,
+    )
+
+    articles = [
+        # AI: 1 recent (5h ago), 2 older within 72h (30h, 48h ago), 1 even older (60h ago)
+        Article(
+            id="ai-1",
+            title="신규 LLM 모델 출시",
+            summary="",
+            url="https://news.com/ai1",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=5)).isoformat(),
+            category="AI·빅테크",
+        ),
+        Article(
+            id="ai-2",
+            title="빅테크 AI 데이터센터 구축 계획",
+            summary="",
+            url="https://news.com/ai2",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=30)).isoformat(),
+            category="AI·빅테크",
+        ),
+        Article(
+            id="ai-3",
+            title="생성형 AI 오픈소스 라이브러리 공개",
+            summary="",
+            url="https://news.com/ai3",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=48)).isoformat(),
+            category="AI·빅테크",
+        ),
+        Article(
+            id="ai-4",
+            title="차세대 GPU 아키텍처 세미나 개최",
+            summary="",
+            url="https://news.com/ai4",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=60)).isoformat(),
+            category="AI·빅테크",
+        ),
+        # 문화: 0 recent, 3 older within 72h (32h, 45h, 65h ago)
+        Article(
+            id="cul-1",
+            title="국립중앙박물관 특별 전시 개막",
+            summary="",
+            url="https://news.com/cul1",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=32)).isoformat(),
+            category="문화·콘텐츠",
+        ),
+        Article(
+            id="cul-2",
+            title="K-웹툰 글로벌 어워즈 성황리 개최",
+            summary="",
+            url="https://news.com/cul2",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=45)).isoformat(),
+            category="문화·콘텐츠",
+        ),
+        Article(
+            id="cul-3",
+            title="전통 공예 현대화 기획전 발표",
+            summary="",
+            url="https://news.com/cul3",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=65)).isoformat(),
+            category="문화·콘텐츠",
+        ),
+    ]
+
+    grouped = pipeline.process(articles)
+
+    # AI: had 1 recent, backfills 1 from 30h ago to reach 2
+    assert len(grouped["AI·빅테크"]) == 2
+    assert [a.id for a in grouped["AI·빅테크"]] == ["ai-1", "ai-2"]
+
+    # Culture: had 0 recent, backfills 2 (32h and 45h) to reach 2
+    assert len(grouped["문화·콘텐츠"]) == 2
+    assert [a.id for a in grouped["문화·콘텐츠"]] == ["cul-1", "cul-2"]
+
+    # Verify order is descending by published_at
+    for cat in ["AI·빅테크", "문화·콘텐츠"]:
+        times = [parse_iso_datetime(a.published_at) for a in grouped[cat]]
+        assert times[0] > times[1]
+
+
+def test_adaptive_lookback_excludes_articles_beyond_max_lookback():
+    """Verify articles older than max_lookback_hours are not backfilled even if quota is deficient."""
+    ref_time = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    pipeline = ArticleFilterPipeline(
+        categories=["라이프스타일"],
+        max_hours=24.0,
+        max_lookback_hours=72.0,
+        min_per_category=2,
+        adaptive_lookback=True,
+        reference_time=ref_time,
+    )
+
+    articles = [
+        # 1 article within 72h (50h ago)
+        Article(
+            id="life-1",
+            title="가을철 건강 관리 수칙",
+            summary="",
+            url="https://news.com/life1",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=50)).isoformat(),
+            category="라이프스타일",
+        ),
+        # 2 articles older than 72h (80h and 100h ago)
+        Article(
+            id="life-old-80",
+            title="수면 패턴과 면역력 관계",
+            summary="",
+            url="https://news.com/life_old80",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=80)).isoformat(),
+            category="라이프스타일",
+        ),
+        Article(
+            id="life-old-100",
+            title="환절기 피부 보습 팁",
+            summary="",
+            url="https://news.com/life_old100",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=100)).isoformat(),
+            category="라이프스타일",
+        ),
+    ]
+
+    grouped = pipeline.process(articles)
+    # Only life-1 should be retained, 80h and 100h must be excluded
+    assert len(grouped["라이프스타일"]) == 1
+    assert grouped["라이프스타일"][0].id == "life-1"
+
+
+def test_adaptive_lookback_preserves_deduplication():
+    """Verify deduplication (URL, ID, title similarity) across primary and backfilled articles."""
+    ref_time = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    pipeline = ArticleFilterPipeline(
+        categories=["IT·통신"],
+        max_hours=24.0,
+        max_lookback_hours=72.0,
+        min_per_category=2,
+        adaptive_lookback=True,
+        title_similarity_threshold=0.8,
+        reference_time=ref_time,
+    )
+
+    articles = [
+        # 1 recent article
+        Article(
+            id="it-recent",
+            title="통신 3사 6G 표준화 공동 협의체 출범",
+            summary="",
+            url="https://news.com/it_recent",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=3)).isoformat(),
+            category="IT·통신",
+        ),
+        # Candidate 1: Same ID as recent
+        Article(
+            id="it-recent",
+            title="다른 제목의 기사",
+            summary="",
+            url="https://news.com/it_other1",
+            outlet="O2",
+            published_at=(ref_time - timedelta(hours=30)).isoformat(),
+            category="IT·통신",
+        ),
+        # Candidate 2: Same URL (with tracking params) as recent
+        Article(
+            id="it-cand-2",
+            title="또 다른 제목의 기사",
+            summary="",
+            url="https://news.com/it_recent?utm_source=feed",
+            outlet="O2",
+            published_at=(ref_time - timedelta(hours=35)).isoformat(),
+            category="IT·통신",
+        ),
+        # Candidate 3: Similar title to recent
+        Article(
+            id="it-cand-3",
+            title="통신3사 6G 표준화 공동 협의체 출범 발표",
+            summary="",
+            url="https://news.com/it_cand3",
+            outlet="O3",
+            published_at=(ref_time - timedelta(hours=40)).isoformat(),
+            category="IT·통신",
+        ),
+        # Candidate 4: Truly distinct article
+        Article(
+            id="it-valid-backfill",
+            title="차세대 반도체 공정 양산 시작",
+            summary="",
+            url="https://news.com/it_semiconductor",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=45)).isoformat(),
+            category="IT·통신",
+        ),
+    ]
+
+    grouped = pipeline.process(articles)
+    assert len(grouped["IT·통신"]) == 2
+    assert [a.id for a in grouped["IT·통신"]] == ["it-recent", "it-valid-backfill"]
+
+
+def test_apply_adaptive_lookback_standalone():
+    """Verify apply_adaptive_lookback works directly as a standalone helper function."""
+    ref_time = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    articles = [
+        Article(
+            id="1",
+            title="정부 긴급 민생대책 회의 주재",
+            summary="",
+            url="https://news.com/p1",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=1)).isoformat(),
+            category="정치",
+        ),
+        Article(
+            id="2",
+            title="통신 3사 차세대 양자 암호통신망 기술 개발",
+            summary="",
+            url="https://news.com/it1",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=36)).isoformat(),
+            category="IT·통신",
+        ),
+        Article(
+            id="3",
+            title="인공지능 가속기 국산화 반도체 로드맵 공개",
+            summary="",
+            url="https://news.com/it2",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=48)).isoformat(),
+            category="IT·통신",
+        ),
+    ]
+
+    result = apply_adaptive_lookback(
+        articles=articles,
+        categories=["정치", "IT·통신"],
+        min_per_category=2,
+        max_hours=24.0,
+        max_lookback_hours=72.0,
+        reference_time=ref_time,
+    )
+
+    # 정치: 1 article (only 1 available in dataset)
+    assert len(result["정치"]) == 1
+    assert result["정치"][0].id == "1"
+
+    # IT·통신: 0 in 24h, backfills 2 from 72h window
+    assert len(result["IT·통신"]) == 2
+    assert [a.id for a in result["IT·통신"]] == ["2", "3"]
+
+    # Empty articles check
+    empty_result = apply_adaptive_lookback(
+        articles=[],
+        categories=["정치", "IT·통신"],
+    )
+    assert empty_result == {"정치": [], "IT·통신": []}
+
+
+def test_article_filter_pipeline_process_flat_with_lookback():
+    """Verify process_flat flattens backfilled articles in descending published_at order."""
+    ref_time = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    pipeline = ArticleFilterPipeline(
+        categories=["정치", "문화·콘텐츠"],
+        max_hours=24.0,
+        max_lookback_hours=72.0,
+        min_per_category=1,
+        adaptive_lookback=True,
+        reference_time=ref_time,
+    )
+
+    articles = [
+        Article(
+            id="p-1",
+            title="정치 뉴스",
+            summary="",
+            url="https://news.com/p1",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=2)).isoformat(),
+            category="정치",
+        ),
+        Article(
+            id="cul-1",
+            title="문화 뉴스 (40h 전)",
+            summary="",
+            url="https://news.com/c1",
+            outlet="O1",
+            published_at=(ref_time - timedelta(hours=40)).isoformat(),
+            category="문화·콘텐츠",
+        ),
+    ]
+
+    flat = pipeline.process_flat(articles)
+    assert len(flat) == 2
+    assert [a.id for a in flat] == ["p-1", "cul-1"]
+    assert parse_iso_datetime(flat[0].published_at) > parse_iso_datetime(flat[1].published_at)

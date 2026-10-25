@@ -1,6 +1,6 @@
 # SLICE-0005: Feed Health Checker & Category Coverage Enhancement
 
-Status: proposed
+Status: completed
 Source: REQ-0002
 
 ## Outcome & Boundaries
@@ -22,11 +22,16 @@ Source: REQ-0002
 ## Tasks & Batches
 | Task ID | Batch | Title | Locked Files | Verify Command | Status |
 |---|---|---|---|---|---|
-| TASK-01 | Batch 1 | Implement automated RSS feed health checker utility | `src/tools/feed_checker.py,tests/test_feed_checker.py` | `.venv/bin/pytest tests/test_feed_checker.py` | `[ ] pending` |
-| TASK-02 | Batch 2 | Enrich deficient categories in feeds catalog and implement adaptive category lookback | `data/feeds.json,src/ingest/filter.py,tests/test_filter.py` | `.venv/bin/pytest tests/test_filter.py` | `[ ] pending` |
+| TASK-01 | Batch 1 | Implement automated RSS feed health checker utility | `src/tools/feed_checker.py,tests/test_feed_checker.py` | `.venv/bin/pytest tests/test_feed_checker.py` | [x] verified |
+| TASK-02 | Batch 2 | Enrich deficient categories in feeds catalog and implement adaptive category lookback | `data/feeds.json,src/ingest/filter.py,tests/test_filter.py` | `.venv/bin/pytest tests/test_filter.py` | [x] verified |
 
 ## Verification Evidence
-NOT RUN
+- 2026-10-25: TASK-01 verified via `.venv/bin/pytest tests/test_feed_checker.py` (14 passed in 0.04s)
+- 2026-10-25: TASK-02 verified via `.venv/bin/pytest tests/test_filter.py` (33 passed, 1 skipped in 0.06s)
+- 2026-10-25: Integration verified via full test suite (188 passed, 1 skipped in 0.92s)
 
 ## Review Findings
-NOT RUN
+- Reviewer: flow_reviewer (autonomous reviewer subagent)
+- Verdict: APPROVED (zero blockers)
+- Findings addressed:
+  - Wired `adaptive_lookback=True` and `min_per_category=2` into `DailyBriefingPipeline.filter_articles()` in `src/pipeline.py` to ensure pipeline runs automatically engage adaptive lookback for deficient categories.

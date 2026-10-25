@@ -85,6 +85,20 @@
       "is_active": true
     },
     {
+      "name": "GeekNews - AI/개발",
+      "url": "https://news.hada.io/rss/news",
+      "categoryId": 6,
+      "category": "AI·빅테크",
+      "is_active": true
+    },
+    {
+      "name": "블로터 - 전체기사",
+      "url": "https://www.bloter.net/rss/allArticle.xml",
+      "categoryId": 6,
+      "category": "AI·빅테크",
+      "is_active": true
+    },
+    {
       "name": "전자신문 - IT·과학",
       "url": "https://rss.etnews.com/Section901.xml",
       "categoryId": 7,
@@ -99,6 +113,20 @@
       "is_active": true
     },
     {
+      "name": "동아일보 - IT의학",
+      "url": "https://rss.donga.com/science.xml",
+      "categoryId": 7,
+      "category": "IT·통신",
+      "is_active": true
+    },
+    {
+      "name": "매일경제 - IT",
+      "url": "https://www.mk.co.kr/rss/50300009/",
+      "categoryId": 7,
+      "category": "IT·통신",
+      "is_active": true
+    },
+    {
       "name": "연합뉴스 - 문화",
       "url": "https://www.yna.co.kr/rss/culture.xml",
       "categoryId": 8,
@@ -108,6 +136,20 @@
     {
       "name": "동아일보 - 문화",
       "url": "https://rss.donga.com/culture.xml",
+      "categoryId": 8,
+      "category": "문화·콘텐츠",
+      "is_active": true
+    },
+    {
+      "name": "조선일보 - 문화",
+      "url": "https://www.chosun.com/arc/outboundfeeds/rss/category/culture-life/?outputType=xml",
+      "categoryId": 8,
+      "category": "문화·콘텐츠",
+      "is_active": true
+    },
+    {
+      "name": "매일경제 - 문화/연예",
+      "url": "https://www.mk.co.kr/rss/30000023/",
       "categoryId": 8,
       "category": "문화·콘텐츠",
       "is_active": true
@@ -136,6 +178,20 @@
     {
       "name": "한국경제 - 라이프",
       "url": "https://www.hankyung.com/feed/life",
+      "categoryId": 10,
+      "category": "라이프스타일",
+      "is_active": true
+    },
+    {
+      "name": "동아일보 - 라이프",
+      "url": "https://rss.donga.com/lifeinfo.xml",
+      "categoryId": 10,
+      "category": "라이프스타일",
+      "is_active": true
+    },
+    {
+      "name": "동아일보 - 건강",
+      "url": "https://rss.donga.com/health.xml",
       "categoryId": 10,
       "category": "라이프스타일",
       "is_active": true

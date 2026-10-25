@@ -296,6 +296,112 @@ def group_and_trim_by_category(
     return trimmed
 
 
+def apply_adaptive_lookback(
+    articles: list[Article],
+    categories: list[str],
+    min_per_category: int = 2,
+    max_hours: float = 24.0,
+    max_lookback_hours: float = 72.0,
+    reference_time: datetime | None = None,
+    max_per_category: int = 5,
+    title_similarity_threshold: float = 0.8,
+) -> dict[str, list[Article]]:
+    """Filter articles with adaptive category lookback fallback.
+
+    For categories that do not meet `min_per_category` within the primary `max_hours` window,
+    this function looks back up to `max_lookback_hours` to backfill missing articles.
+
+    Args:
+        articles: Raw or pre-filtered Article list.
+        categories: Target categories to include.
+        min_per_category: Minimum desired articles per category before lookback activates.
+        max_hours: Primary recency window in hours (e.g. 24.0).
+        max_lookback_hours: Extended recency lookback window in hours (e.g. 72.0).
+        reference_time: Reference datetime for recency calculation.
+        max_per_category: Maximum number of articles per category.
+        title_similarity_threshold: Threshold ratio for title deduplication.
+
+    Returns:
+        Dictionary mapping category names to lists of unique, trimmed Article instances.
+    """
+    if not articles:
+        return {cat: [] for cat in categories} if categories else {}
+
+    # Sort articles newest first before deduplication so newer items are preferred
+    sorted_articles = sorted(
+        articles,
+        key=lambda art: parse_iso_datetime(art.published_at)
+        or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+
+    # Step 1: Deduplicate all articles across URLs, IDs, and title similarity
+    deduped_articles = deduplicate_articles(
+        sorted_articles,
+        title_similarity_threshold=title_similarity_threshold,
+    )
+
+    # Step 2: Primary recency filtering and category grouping
+    recent_articles = filter_by_recency(
+        deduped_articles,
+        max_hours=max_hours,
+        reference_time=reference_time,
+    )
+    grouped = group_and_trim_by_category(
+        recent_articles,
+        categories=categories,
+        max_per_category=max_per_category,
+    )
+
+    # Step 3: Adaptive lookback for deficient categories
+    target_quota = min(min_per_category, max_per_category)
+    deficient_categories = [
+        cat for cat in categories if len(grouped.get(cat, [])) < target_quota
+    ]
+
+    if deficient_categories:
+        effective_lookback = max(max_lookback_hours, max_hours)
+        extended_articles = filter_by_recency(
+            deduped_articles,
+            max_hours=effective_lookback,
+            reference_time=reference_time,
+        )
+        extended_grouped = group_and_trim_by_category(
+            extended_articles,
+            categories=deficient_categories,
+            max_per_category=max(max_per_category, min_per_category, len(extended_articles)),
+        )
+
+        for cat in deficient_categories:
+            cat_articles = list(grouped.get(cat, []))
+            existing_ids = {a.id for a in cat_articles if a.id}
+            existing_urls = {normalize_article_url(a.url) for a in cat_articles if a.url}
+
+            for candidate in extended_grouped.get(cat, []):
+                if len(cat_articles) >= target_quota:
+                    break
+                cand_url = normalize_article_url(candidate.url)
+                if candidate.id and candidate.id in existing_ids:
+                    continue
+                if cand_url and cand_url in existing_urls:
+                    continue
+                cat_articles.append(candidate)
+                if candidate.id:
+                    existing_ids.add(candidate.id)
+                if cand_url:
+                    existing_urls.add(cand_url)
+
+            # Sort descending by published_at
+            grouped[cat] = sorted(
+                cat_articles,
+                key=lambda art: parse_iso_datetime(art.published_at)
+                or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True,
+            )
+
+    return grouped
+
+
 class ArticleFilterPipeline:
     """Pipeline combining deduplication, recency filtering, category grouping, and quota trimming."""
 
@@ -306,6 +412,9 @@ class ArticleFilterPipeline:
         max_per_category: int = 5,
         title_similarity_threshold: float = 0.8,
         reference_time: datetime | None = None,
+        min_per_category: int = 0,
+        adaptive_lookback: bool = False,
+        max_lookback_hours: float = 72.0,
     ) -> None:
         """Initialize the filtering pipeline.
 
@@ -315,12 +424,18 @@ class ArticleFilterPipeline:
             max_per_category: Maximum number of articles per category.
             title_similarity_threshold: Threshold ratio for title deduplication.
             reference_time: Reference datetime for recency calculation.
+            min_per_category: Minimum number of articles per category before lookback triggers.
+            adaptive_lookback: Whether to enable adaptive lookback fallback.
+            max_lookback_hours: Extended recency lookback window in hours.
         """
         self.categories = list(categories) if categories is not None else None
         self.max_hours = max_hours
         self.max_per_category = max_per_category
         self.title_similarity_threshold = title_similarity_threshold
         self.reference_time = reference_time
+        self.min_per_category = min_per_category
+        self.adaptive_lookback = adaptive_lookback
+        self.max_lookback_hours = max_lookback_hours
 
     def process(self, articles: list[Article]) -> dict[str, list[Article]]:
         """Run the end-to-end filtering pipeline.
@@ -336,35 +451,59 @@ class ArticleFilterPipeline:
                 return {cat: [] for cat in self.categories}
             return {}
 
-        # Step 1: Filter out old or invalid date articles
-        recent_articles = filter_by_recency(
-            articles,
-            max_hours=self.max_hours,
-            reference_time=self.reference_time,
-        )
+        if not (self.adaptive_lookback or self.min_per_category > 0):
+            # Step 1: Filter out old or invalid date articles
+            recent_articles = filter_by_recency(
+                articles,
+                max_hours=self.max_hours,
+                reference_time=self.reference_time,
+            )
 
-        # Step 2: Deduplicate articles by URL and title similarity
-        deduped_articles = deduplicate_articles(
-            recent_articles,
-            title_similarity_threshold=self.title_similarity_threshold,
-        )
+            # Step 2: Deduplicate articles by URL and title similarity
+            deduped_articles = deduplicate_articles(
+                recent_articles,
+                title_similarity_threshold=self.title_similarity_threshold,
+            )
 
-        # Step 3: Group by category and trim to max quota
+            # Step 3: Group by category and trim to max quota
+            target_categories = self.categories
+            if target_categories is None:
+                # Preserve order of appearance across unique categories
+                seen_cats: set[str] = set()
+                target_categories = []
+                for art in deduped_articles:
+                    cat = art.category or "종합"
+                    if cat not in seen_cats:
+                        seen_cats.add(cat)
+                        target_categories.append(cat)
+
+            return group_and_trim_by_category(
+                deduped_articles,
+                categories=target_categories,
+                max_per_category=self.max_per_category,
+            )
+
+        # Adaptive category lookback enabled
         target_categories = self.categories
         if target_categories is None:
-            # Preserve order of appearance across unique categories
-            seen_cats: set[str] = set()
+            seen_cats = set()
             target_categories = []
-            for art in deduped_articles:
+            for art in articles:
                 cat = art.category or "종합"
                 if cat not in seen_cats:
                     seen_cats.add(cat)
                     target_categories.append(cat)
 
-        return group_and_trim_by_category(
-            deduped_articles,
+        effective_min = self.min_per_category if self.min_per_category > 0 else 2
+        return apply_adaptive_lookback(
+            articles=articles,
             categories=target_categories,
+            min_per_category=effective_min,
+            max_hours=self.max_hours,
+            max_lookback_hours=self.max_lookback_hours,
+            reference_time=self.reference_time,
             max_per_category=self.max_per_category,
+            title_similarity_threshold=self.title_similarity_threshold,
         )
 
     def process_flat(self, articles: list[Article]) -> list[Article]:
