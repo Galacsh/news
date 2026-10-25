@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="ko">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>파이프라인 모니터링 & 수집 현황 대시보드</title>
+        <!-- Tailwind CSS CDN -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- Phosphor Icons CDN -->
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sans: [
+                                "Pretendard",
+                                "-apple-system",
+                                "BlinkMacSystemFont",
+                                "system-ui",
+                                "Roboto",
+                                "sans-serif",
+                            ],
+                        },
+                    },
+                },
+            };
+        </script>
+        <style>
+            .custom-scroll::-webkit-scrollbar {
+                height: 6px;
+                width: 6px;
+            }
+            .custom-scroll::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            .custom-scroll::-webkit-scrollbar-thumb {
+                background: rgba(148, 163, 184, 0.25);
+                border-radius: 9999px;
+            }
+            .custom-scroll::-webkit-scrollbar-thumb:hover {
+                background: rgba(148, 163, 184, 0.45);
+            }
+        </style>
+    </head>
+    <body
+        class="bg-slate-950 text-slate-100 min-h-screen antialiased font-sans flex flex-col justify-between selection:bg-sky-500/30 selection:text-sky-200"
+    >
+        <!-- Top Navigation Header -->
+        <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md bg-slate-900/90">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-3">
+                        <span class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 border border-sky-500/30">
+                            <i class="ph-bold ph-chart-line-up text-xl"></i>
+                        </span>
+                        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white">
+                            파이프라인 모니터링 & 수집 현황 대시보드
+                        </h1>
+                    </div>
+                    <div class="flex items-center gap-3 mt-2 flex-wrap text-xs sm:text-sm">
+                        <span class="text-slate-400 font-medium flex items-center gap-1.5">
+                            <i class="ph-bold ph-clock text-slate-500"></i>
+                            수행 기준: <span id="telemetryTimestamp" class="text-slate-300 font-mono">데이터 확인 중...</span>
+                        </span>
+                        <span
+                            id="overallStatusBadge"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700 transition-colors"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 상태 확인 중
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <a
+                        href="index.html"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm"
+                        title="뉴스 브리핑 페이지로 이동"
+                    >
+                        <i class="ph-bold ph-newspaper text-base text-sky-400"></i>
+                        <span>뉴스 브리핑 홈</span>
+                    </a>
+                    <button
+                        type="button"
+                        onclick="loadTelemetry()"
+                        id="refreshBtn"
+                        class="w-9 h-9 aspect-square inline-flex items-center justify-center text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm shrink-0"
+                        title="텔레메트리 데이터 새로고침"
+                        aria-label="데이터 새로고침"
+                    >
+                        <i id="refreshIcon" class="ph-bold ph-arrows-clockwise text-base"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-grow">
+            <!-- Loading Indicator -->
+            <div id="loadingState" class="hidden py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
+                <i class="ph-bold ph-spinner animate-spin text-3xl text-sky-400"></i>
+                <p class="text-sm font-medium">최신 텔레메트리 데이터를 로드하는 중입니다...</p>
+            </div>
+
+            <!-- Error Banner -->
+            <div
+                id="errorMessage"
+                class="hidden mb-6 p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-200 flex items-start justify-between gap-3 shadow-lg"
+            >
+                <div class="flex items-start gap-3">
+                    <i class="ph-bold ph-warning-circle text-rose-400 text-xl mt-0.5 shrink-0"></i>
+                    <div>
+                        <h3 class="text-sm font-bold text-rose-300">텔레메트리 데이터를 불러올 수 없습니다</h3>
+                        <p id="errorDetail" class="text-xs text-rose-300/80 mt-1">
+                            data/telemetry/latest.json 파일을 찾을 수 없거나 파싱 오류가 발생했습니다. 파이프라인 실행 후 파일이 생성되었는지 확인해주세요.
+                        </p>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onclick="loadTelemetry()"
+                    class="px-3 py-1.5 text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 rounded-lg text-rose-200 transition shrink-0"
+                >
+                    다시 시도
+                </button>
+            </div>
+
+            <!-- Metrics Summary Cards Grid -->
+            <section class="mb-8">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                        <i class="ph-bold ph-activity text-lg"></i>
+                    </span>
+                    <h2 class="text-lg font-bold text-white tracking-tight">수집 및 실행 성능 지표 (Execution Metrics)</h2>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Card 1: Feed Health -->
+                    <div
+                        id="feedsSummary"
+                        class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-md hover:border-slate-700 transition"
+                    >
+                        <div class="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
+                            <span class="flex items-center gap-1.5 uppercase tracking-wider">
+                                <i class="ph-bold ph-broadcast text-sky-400 text-sm"></i> 피드 수집 상태
+                            </span>
+                            <span id="feedHealthBadge" class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400">대기중</span>
+                        </div>
+                        <div class="my-2">
+                            <div class="text-2xl font-bold tracking-tight text-white flex items-baseline gap-1.5">
+                                <span id="feedsSuccessCount" class="text-emerald-400">-</span>
+                                <span class="text-slate-500 text-base">/</span>
+                                <span id="feedsAttemptedCount" class="text-slate-300">-</span>
+                                <span class="text-xs font-normal text-slate-400 ml-1">피드 정상</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2.5 mt-2">
+                            <span>수집 성공률</span>
+                            <span id="feedSuccessRate" class="font-bold font-mono text-slate-200">- %</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Ingestion Funnel -->
+                    <div
+                        id="funnelSummary"
+                        class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-md hover:border-slate-700 transition"
+                    >
+                        <div class="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
+                            <span class="flex items-center gap-1.5 uppercase tracking-wider">
+                                <i class="ph-bold ph-funnel text-indigo-400 text-sm"></i> 수집 & 선별 퍼널
+                            </span>
+                            <span id="funnelRetentionBadge" class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400">대기중</span>
+                        </div>
+                        <div class="my-2">
+                            <div class="text-2xl font-bold tracking-tight text-white flex items-baseline gap-1.5">
+                                <span id="filteredArticlesCount" class="text-indigo-400">-</span>
+                                <span class="text-slate-500 text-base">/</span>
+                                <span id="rawArticlesCount" class="text-slate-300">-</span>
+                                <span class="text-xs font-normal text-slate-400 ml-1">건 선별</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2.5 mt-2">
+                            <span>선별 잔존율</span>
+                            <span id="funnelRetentionRate" class="font-bold font-mono text-slate-200">- %</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: AI Summarizer -->
+                    <div
+                        id="geminiSummary"
+                        class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-md hover:border-slate-700 transition"
+                    >
+                        <div class="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
+                            <span class="flex items-center gap-1.5 uppercase tracking-wider">
+                                <i class="ph-bold ph-sparkle text-amber-400 text-sm"></i> AI 요약 엔진
+                            </span>
+                            <span id="geminiModeBadge" class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400">대기중</span>
+                        </div>
+                        <div class="my-2">
+                            <div class="text-2xl font-bold tracking-tight text-white flex items-baseline gap-1.5">
+                                <span id="geminiLatencyVal" class="text-amber-400 font-mono">-</span>
+                                <span class="text-xs font-normal text-slate-400 ml-1">ms 소요</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2.5 mt-2">
+                            <span>LLM 생성 상태</span>
+                            <span id="geminiStatusText" class="font-bold text-slate-200">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: Pipeline Latency -->
+                    <div
+                        id="pipelineLatencySummary"
+                        class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-md hover:border-slate-700 transition"
+                    >
+                        <div class="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
+                            <span class="flex items-center gap-1.5 uppercase tracking-wider">
+                                <i class="ph-bold ph-timer text-emerald-400 text-sm"></i> 총 파이프라인 지연
+                            </span>
+                            <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400">End-to-End</span>
+                        </div>
+                        <div class="my-2">
+                            <div class="text-2xl font-bold tracking-tight text-white flex items-baseline gap-1.5">
+                                <span id="pipelineLatencyVal" class="text-emerald-400 font-mono">-</span>
+                                <span id="pipelineLatencyUnit" class="text-xs font-normal text-slate-400 ml-1">ms 소요</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2.5 mt-2">
+                            <span>전체 처리 상태</span>
+                            <span id="pipelineStatusText" class="font-bold text-emerald-400">완료됨</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Category Breakdown Visualizer -->
+            <section class="mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                            <i class="ph-bold ph-squares-four text-lg"></i>
+                        </span>
+                        <h2 class="text-lg font-bold text-white tracking-tight">카테고리별 선별 기사 현황 (Category Breakdown)</h2>
+                    </div>
+                    <span id="categoryTotalBadge" class="text-xs text-slate-400 font-mono">총 -건</span>
+                </div>
+
+                <div
+                    id="categoryBreakdown"
+                    class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3"
+                >
+                    <!-- Category Cards injected dynamically -->
+                </div>
+            </section>
+
+            <!-- Per-Feed Collection Status Table -->
+            <section class="mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                            <i class="ph-bold ph-table text-lg"></i>
+                        </span>
+                        <h2 class="text-lg font-bold text-white tracking-tight">피드별 수집 세부 현황 (Feed Source Status)</h2>
+                    </div>
+                    <div class="text-xs text-slate-400">
+                        총 <span id="feedTableCount" class="font-mono text-slate-200 font-semibold">-</span>개 피드 대상
+                    </div>
+                </div>
+
+                <div id="feedTableContainer" class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                    <div class="overflow-x-auto custom-scroll">
+                        <table id="feedStatusTable" class="w-full text-left text-sm text-slate-300">
+                            <thead class="bg-slate-800/90 text-xs text-slate-400 uppercase font-semibold border-b border-slate-800 tracking-wider">
+                                <tr>
+                                    <th class="px-4 py-3.5 whitespace-nowrap">언론사 (Outlet)</th>
+                                    <th class="px-4 py-3.5 whitespace-nowrap">카테고리 (Category)</th>
+                                    <th class="px-4 py-3.5 min-w-[200px]">피드 URL (URL)</th>
+                                    <th class="px-4 py-3.5 whitespace-nowrap">상태 (Status)</th>
+                                    <th class="px-4 py-3.5 text-right whitespace-nowrap">수집 건수 (Articles)</th>
+                                    <th class="px-4 py-3.5 text-right whitespace-nowrap">응답 시간 (Latency ms)</th>
+                                    <th class="px-4 py-3.5 min-w-[180px]">오류 내역 (Error)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="feedTableBody" class="divide-y divide-slate-800/60 font-medium">
+                                <tr>
+                                    <td colspan="7" class="px-4 py-8 text-center text-slate-500 text-sm">
+                                        데이터를 불러오는 중입니다...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="border-t border-slate-800/80 bg-slate-900/60 py-6 text-center text-xs text-slate-500">
+            <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <p>© 대한민국 주요 뉴스 브리핑 시스템 · 실시간 파이프라인 모니터링</p>
+                <a href="index.html" class="text-sky-400 hover:text-sky-300 flex items-center gap-1 font-medium transition">
+                    <span>뉴스 브리핑 페이지로 돌아가기</span>
+                    <i class="ph-bold ph-arrow-square-out text-sm"></i>
+                </a>
+            </div>
+        </footer>
+
+        <!-- Toast Notification Container -->
+        <div
+            id="toastContainer"
+            class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none transition-all duration-300"
+        ></div>
+
+        <!-- Dashboard JavaScript Logic -->
+        <script>
+            function showToast(message, type = "info") {
+                const container = document.getElementById("toastContainer");
+                if (!container) return;
+                const toast = document.createElement("div");
+                toast.className = `px-4 py-2.5 rounded-xl shadow-lg border text-xs sm:text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-0 flex items-center gap-2 ${
+                    type === "success"
+                        ? "bg-emerald-950/90 border-emerald-500/40 text-emerald-200"
+                        : type === "error"
+                        ? "bg-rose-950/90 border-rose-500/40 text-rose-200"
+                        : "bg-slate-800/95 border-slate-700 text-slate-200"
+                }`;
+                const iconName =
+                    type === "success"
+                        ? "ph-check-circle"
+                        : type === "error"
+                        ? "ph-warning-circle"
+                        : "ph-info";
+                toast.innerHTML = `<i class="ph-bold ${iconName} text-base shrink-0"></i><span>${message}</span>`;
+                container.appendChild(toast);
+                requestAnimationFrame(() => {
+                    toast.classList.remove("translate-y-2", "opacity-0");
+                });
+                setTimeout(() => {
+                    toast.classList.add("translate-y-2", "opacity-0");
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+
+            function escapeHtml(str) {
+                if (!str) return "";
+                return String(str)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            const CATEGORY_COLORS = {
+                "정치": "bg-red-500/10 text-red-400 border-red-500/30",
+                "경제·금융": "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+                "IT·과학": "bg-sky-500/10 text-sky-400 border-sky-500/30",
+                "사회": "bg-amber-500/10 text-amber-400 border-amber-500/30",
+                "문화·생활": "bg-purple-500/10 text-purple-400 border-purple-500/30",
+                "국제": "bg-indigo-500/10 text-indigo-400 border-indigo-500/30",
+                "기타": "bg-slate-500/10 text-slate-400 border-slate-500/30",
+            };
+
+            const DEFAULT_CATEGORIES = ["정치", "경제·금융", "IT·과학", "사회", "문화·생활", "국제", "기타"];
+
+            async function loadTelemetry() {
+                const refreshBtn = document.getElementById("refreshBtn");
+                const refreshIcon = document.getElementById("refreshIcon");
+                const loadingState = document.getElementById("loadingState");
+                const errorMessage = document.getElementById("errorMessage");
+
+                if (refreshBtn) refreshBtn.disabled = true;
+                if (refreshIcon) refreshIcon.classList.add("animate-spin");
+                if (loadingState) loadingState.classList.remove("hidden");
+                if (errorMessage) errorMessage.classList.add("hidden");
+
+                try {
+                    const url = `data/telemetry/latest.json?t=${Date.now()}`;
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    const data = await response.json();
+                    renderTelemetry(data);
+                    showToast("최신 텔레메트리 데이터를 불러왔습니다.", "success");
+                } catch (err) {
+                    console.error("Telemetry fetch failed:", err);
+                    if (errorMessage) {
+                        errorMessage.classList.remove("hidden");
+                        const errorDetail = document.getElementById("errorDetail");
+                        if (errorDetail) {
+                            errorDetail.textContent = `데이터를 가져올 수 없습니다 (${err.message}). data/telemetry/latest.json 파일이 존재하는지 확인하십시오.`;
+                        }
+                    }
+                    showToast("텔레메트리 데이터를 불러오는데 실패했습니다.", "error");
+                } finally {
+                    if (refreshBtn) refreshBtn.disabled = false;
+                    if (refreshIcon) refreshIcon.classList.remove("animate-spin");
+                    if (loadingState) loadingState.classList.add("hidden");
+                }
+            }
+
+            function renderTelemetry(data) {
+                // 1. Timestamp & Execution Date
+                const timestampEl = document.getElementById("telemetryTimestamp");
+                if (timestampEl) {
+                    if (data.timestamp) {
+                        try {
+                            const d = new Date(data.timestamp);
+                            timestampEl.textContent = isNaN(d.getTime()) ? data.timestamp : d.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+                        } catch {
+                            timestampEl.textContent = data.timestamp;
+                        }
+                    } else if (data.date) {
+                        timestampEl.textContent = data.date;
+                    } else {
+                        timestampEl.textContent = "기록 없음";
+                    }
+                }
+
+                // 2. Overall Status Badge
+                // "정상 가동 (Healthy)" (green) if feeds_failed == 0 and fallback==False, else "주의 / 오류 (Degraded)" (amber/red)
+                const overallBadge = document.getElementById("overallStatusBadge");
+                if (overallBadge) {
+                    const feedsFailed = Number(data.feeds_failed) || 0;
+                    const fallbackUsed = Boolean(data.gemini_fallback_used);
+                    const isHealthy = feedsFailed === 0 && !fallbackUsed;
+
+                    if (isHealthy) {
+                        overallBadge.className =
+                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30";
+                        overallBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 정상 가동 (Healthy)`;
+                    } else {
+                        overallBadge.className =
+                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30";
+                        overallBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> 주의 / 오류 (Degraded)`;
+                    }
+                }
+
+                // 3. Metric Summary Cards
+                // Card 1: Feed Health (#feedsSummary)
+                const attempted = Number(data.feeds_attempted) || 0;
+                const failed = Number(data.feeds_failed) || 0;
+                const successFeeds = Math.max(0, attempted - failed);
+                const successRate = attempted > 0 ? ((successFeeds / attempted) * 100).toFixed(1) : "0.0";
+
+                const feedsSuccessCount = document.getElementById("feedsSuccessCount");
+                if (feedsSuccessCount) feedsSuccessCount.textContent = successFeeds;
+                const feedsAttemptedCount = document.getElementById("feedsAttemptedCount");
+                if (feedsAttemptedCount) feedsAttemptedCount.textContent = attempted;
+                const feedSuccessRate = document.getElementById("feedSuccessRate");
+                if (feedSuccessRate) feedSuccessRate.textContent = `${successRate}%`;
+
+                const feedHealthBadge = document.getElementById("feedHealthBadge");
+                if (feedHealthBadge) {
+                    if (failed === 0 && attempted > 0) {
+                        feedHealthBadge.className = "px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                        feedHealthBadge.textContent = "100% 정상";
+                    } else if (failed > 0) {
+                        feedHealthBadge.className = "px-2 py-0.5 rounded text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30";
+                        feedHealthBadge.textContent = `${failed}건 실패`;
+                    } else {
+                        feedHealthBadge.className = "px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400";
+                        feedHealthBadge.textContent = "피드 없음";
+                    }
+                }
+
+                // Card 2: Ingestion Funnel (#funnelSummary)
+                const rawCount = Number(data.raw_articles_count) || 0;
+                const filteredCount = Number(data.filtered_count) || 0;
+                const retentionRate = rawCount > 0 ? ((filteredCount / rawCount) * 100).toFixed(1) : "0.0";
+
+                const filteredArticlesCount = document.getElementById("filteredArticlesCount");
+                if (filteredArticlesCount) filteredArticlesCount.textContent = filteredCount;
+                const rawArticlesCount = document.getElementById("rawArticlesCount");
+                if (rawArticlesCount) rawArticlesCount.textContent = rawCount;
+                const funnelRetentionRate = document.getElementById("funnelRetentionRate");
+                if (funnelRetentionRate) funnelRetentionRate.textContent = `${retentionRate}%`;
+
+                const funnelRetentionBadge = document.getElementById("funnelRetentionBadge");
+                if (funnelRetentionBadge) {
+                    funnelRetentionBadge.className = "px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30";
+                    funnelRetentionBadge.textContent = `${retentionRate}% 선별`;
+                }
+
+                // Card 3: AI Summarizer (#geminiSummary)
+                const geminiLatency = Number(data.gemini_latency_ms) || 0;
+                const fallbackUsed = Boolean(data.gemini_fallback_used);
+
+                const geminiLatencyVal = document.getElementById("geminiLatencyVal");
+                if (geminiLatencyVal) geminiLatencyVal.textContent = Math.round(geminiLatency).toLocaleString();
+
+                const geminiModeBadge = document.getElementById("geminiModeBadge");
+                if (geminiModeBadge) {
+                    if (fallbackUsed) {
+                        geminiModeBadge.className = "px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30";
+                        geminiModeBadge.textContent = "휴리스틱 폴백";
+                    } else {
+                        geminiModeBadge.className = "px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                        geminiModeBadge.textContent = "정상 AI 생성";
+                    }
+                }
+
+                const geminiStatusText = document.getElementById("geminiStatusText");
+                if (geminiStatusText) {
+                    geminiStatusText.textContent = fallbackUsed ? "폴백 알고리즘 가동" : "Gemini API 정상 합성";
+                    geminiStatusText.className = fallbackUsed ? "font-bold text-amber-400" : "font-bold text-emerald-400";
+                }
+
+                // Card 4: Pipeline Latency (#pipelineLatencySummary)
+                const pipelineLatency = Number(data.pipeline_latency_ms) || 0;
+                const pipelineLatencyVal = document.getElementById("pipelineLatencyVal");
+                const pipelineLatencyUnit = document.getElementById("pipelineLatencyUnit");
+                if (pipelineLatencyVal && pipelineLatencyUnit) {
+                    if (pipelineLatency >= 1000) {
+                        pipelineLatencyVal.textContent = (pipelineLatency / 1000).toFixed(2);
+                        pipelineLatencyUnit.textContent = "초 (s) 소요";
+                    } else {
+                        pipelineLatencyVal.textContent = Math.round(pipelineLatency).toLocaleString();
+                        pipelineLatencyUnit.textContent = "ms 소요";
+                    }
+                }
+
+                // 4. Category Breakdown Visualizer (#categoryBreakdown)
+                const breakdownContainer = document.getElementById("categoryBreakdown");
+                const breakdown = data.category_breakdown || {};
+                const totalCatArticles = Object.values(breakdown).reduce((a, b) => a + (Number(b) || 0), 0) || filteredCount;
+
+                const categoryTotalBadge = document.getElementById("categoryTotalBadge");
+                if (categoryTotalBadge) {
+                    categoryTotalBadge.textContent = `선별 기사 총 ${totalCatArticles}건`;
+                }
+
+                if (breakdownContainer) {
+                    const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...Object.keys(breakdown)]));
+                    breakdownContainer.innerHTML = allCategories
+                        .map((cat) => {
+                            const count = Number(breakdown[cat]) || 0;
+                            const percent = totalCatArticles > 0 ? ((count / totalCatArticles) * 100).toFixed(1) : "0.0";
+                            const colorClass = CATEGORY_COLORS[cat] || "bg-slate-800 text-slate-300 border-slate-700";
+
+                            return `
+                            <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col justify-between hover:border-slate-700 transition">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="px-2 py-0.5 rounded text-xs font-semibold border ${colorClass}">
+                                        ${escapeHtml(cat)}
+                                    </span>
+                                    <span class="text-xs font-mono text-slate-400">${percent}%</span>
+                                </div>
+                                <div class="text-xl font-bold text-white mt-1">
+                                    ${count}<span class="text-xs font-normal text-slate-500 ml-1">건</span>
+                                </div>
+                                <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-2.5">
+                                    <div class="bg-sky-500 h-full rounded-full" style="width: ${Math.min(100, Math.max(0, percent))}%"></div>
+                                </div>
+                            </div>
+                        `;
+                        })
+                        .join("");
+                }
+
+                // 5. Per-Feed Collection Status Table (#feedStatusTable)
+                const feedTableBody = document.getElementById("feedTableBody");
+                const feedTableCount = document.getElementById("feedTableCount");
+                const feedStatuses = Array.isArray(data.feed_status) ? data.feed_status : [];
+
+                if (feedTableCount) {
+                    feedTableCount.textContent = feedStatuses.length;
+                }
+
+                if (feedTableBody) {
+                    if (feedStatuses.length === 0) {
+                        feedTableBody.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-slate-500 text-sm">
+                                    수집된 피드 내역이 없습니다.
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        feedTableBody.innerHTML = feedStatuses
+                            .map((item) => {
+                                const isSuccess = item.status === "success";
+                                const statusBadge = isSuccess
+                                    ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> 성공
+                                       </span>`
+                                    : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                                         <span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span> 실패
+                                       </span>`;
+
+                                const catColor = CATEGORY_COLORS[item.category] || "bg-slate-800 text-slate-300 border-slate-700";
+                                const errorHtml = item.error
+                                    ? `<span class="text-rose-400 text-xs font-mono break-all inline-block max-w-xs sm:max-w-md">${escapeHtml(item.error)}</span>`
+                                    : `<span class="text-slate-600 text-xs">-</span>`;
+                                const latencyStr = item.latency_ms !== undefined && item.latency_ms !== null
+                                    ? `${Number(item.latency_ms).toFixed(1)} ms`
+                                    : "-";
+
+                                return `
+                                <tr class="hover:bg-slate-800/40 transition-colors">
+                                    <td class="px-4 py-3 font-semibold text-white whitespace-nowrap">${escapeHtml(item.outlet || "-")}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="px-2 py-0.5 rounded text-xs font-medium border ${catColor}">
+                                            ${escapeHtml(item.category || "-")}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-xs text-slate-400 font-mono truncate max-w-[220px]">
+                                        <a href="${escapeHtml(item.url || "#")}" target="_blank" rel="noopener noreferrer" class="hover:text-sky-400 hover:underline inline-flex items-center gap-1" title="${escapeHtml(item.url || "")}">
+                                            <span>${escapeHtml(item.url || "-")}</span>
+                                            <i class="ph-bold ph-arrow-square-out text-[11px] shrink-0"></i>
+                                        </a>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">${statusBadge}</td>
+                                    <td class="px-4 py-3 text-right font-mono font-semibold text-slate-200">${item.articles_count ?? 0}</td>
+                                    <td class="px-4 py-3 text-right font-mono text-slate-300">${latencyStr}</td>
+                                    <td class="px-4 py-3">${errorHtml}</td>
+                                </tr>
+                            `;
+                            })
+                            .join("");
+                    }
+                }
+            }
+
+            // Auto-load on page initialization
+            window.onload = loadTelemetry;
+        </script>
+    </body>
+</html>

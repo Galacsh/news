@@ -17,6 +17,7 @@ from src.llm.client import GeminiAPIError, GeminiClient
 from src.pipeline import (
     DailyBriefingPipeline,
     build_parser,
+    generate_archive_manifest,
     load_env_files,
     main,
     parse_pipeline_date,
@@ -223,6 +224,33 @@ def test_run_pipeline_dry_run_success(
         archive_data = json.load(f)
     assert archive_data == latest_data
 
+    # 6. Telemetry output exists and contains expected schema and metrics
+    telemetry_latest_file = output_dir / "telemetry" / "latest.json"
+    telemetry_archive_file = output_dir / "telemetry" / "2026-10-25.json"
+
+    assert telemetry_latest_file.is_file(), "telemetry/latest.json must be written"
+    assert telemetry_archive_file.is_file(), "telemetry/2026-10-25.json must be written"
+
+    with open(telemetry_latest_file, "r", encoding="utf-8") as f:
+        telemetry_data = json.load(f)
+
+    assert "timestamp" in telemetry_data
+    assert telemetry_data["date"] == "2026-10-25"
+    assert telemetry_data["feeds_attempted"] == 2
+    assert telemetry_data["feeds_failed"] == 0
+    assert telemetry_data["raw_articles_count"] == 2
+    assert telemetry_data["filtered_count"] == 2
+    assert isinstance(telemetry_data["gemini_latency_ms"], (int, float))
+    assert telemetry_data["gemini_fallback_used"] is False
+    assert telemetry_data["category_breakdown"] == {"경제·금융": 1, "정치": 1}
+    assert isinstance(telemetry_data["feed_status"], list)
+    assert len(telemetry_data["feed_status"]) == 2
+    assert isinstance(telemetry_data["pipeline_latency_ms"], (int, float))
+
+    with open(telemetry_archive_file, "r", encoding="utf-8") as f:
+        telemetry_archive_data = json.load(f)
+    assert telemetry_archive_data == telemetry_data
+
 
 def test_run_pipeline_empty_feeds(tmp_path: Path) -> None:
     """Test pipeline execution when feeds catalog is empty, ensuring fallback briefing."""
@@ -410,3 +438,416 @@ def test_cli_subprocess_run(tmp_path: Path, mock_feeds_file: Path) -> None:
         data = json.load(f)
     assert len(data["topHeadlines"]) == 0
     assert len(data["articles"]) == 0
+
+
+def test_pipeline_telemetry_metrics(
+    tmp_path: Path,
+    mock_feeds_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify comprehensive pipeline telemetry logging, metrics types, feed failures, and LLM fallback tracking."""
+    sample_article = Article(
+        id="art-1",
+        title="정부 새 경제 부양책 국무회의 통과",
+        summary="국무회의에서 대규모 경기 부양 대책이 최종 의결되었습니다.",
+        url="https://example.com/news/1",
+        outlet="테스트 언론",
+        published_at="2026-10-25T10:00:00+00:00",
+        category="정치",
+        category_id=1,
+    )
+
+    # 1. Normal run: check all fields and types
+    monkeypatch.setattr(
+        "src.ingest.rss.RSSFeedParser.parse_feed",
+        lambda url, category="", outlet="", timeout=10.0: [sample_article],
+    )
+
+    out_normal = tmp_path / "telemetry_normal"
+    run_pipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=out_normal,
+        dry_run=True,
+        date="2026-10-25",
+    )
+
+    latest_telemetry = out_normal / "telemetry" / "latest.json"
+    assert latest_telemetry.is_file()
+    with open(latest_telemetry, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    expected_keys = {
+        "timestamp",
+        "date",
+        "feeds_attempted",
+        "feeds_failed",
+        "raw_articles_count",
+        "filtered_count",
+        "gemini_latency_ms",
+        "gemini_fallback_used",
+        "category_breakdown",
+        "feed_status",
+        "pipeline_latency_ms",
+    }
+    assert expected_keys.issubset(data.keys())
+    assert isinstance(data["feeds_attempted"], int)
+    assert isinstance(data["feeds_failed"], int)
+    assert isinstance(data["raw_articles_count"], int)
+    assert isinstance(data["filtered_count"], int)
+    assert isinstance(data["gemini_latency_ms"], (int, float))
+    assert isinstance(data["category_breakdown"], dict)
+    assert isinstance(data["feed_status"], list)
+    assert isinstance(data["gemini_fallback_used"], bool)
+    assert isinstance(data["pipeline_latency_ms"], (int, float))
+
+    for status_entry in data["feed_status"]:
+        assert "outlet" in status_entry
+        assert "url" in status_entry
+        assert "category" in status_entry
+        assert status_entry["status"] in ("success", "failed")
+        assert isinstance(status_entry["articles_count"], int)
+        assert isinstance(status_entry["latency_ms"], (int, float))
+
+    # 2. Feed failure: verify feeds_failed > 0 when a feed raises an exception
+    def mock_partial_fail_feed(url, category="", outlet="", timeout=10.0):
+        if "politics" in url:
+            raise urllib.error.URLError("Connection refused to politics feed")
+        return [sample_article]
+
+    monkeypatch.setattr(
+        "src.ingest.rss.RSSFeedParser.parse_feed",
+        mock_partial_fail_feed,
+    )
+
+    out_feed_fail = tmp_path / "telemetry_feed_fail"
+    run_pipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=out_feed_fail,
+        dry_run=True,
+        date="2026-10-25",
+    )
+
+    with open(out_feed_fail / "telemetry" / "latest.json", "r", encoding="utf-8") as f:
+        feed_fail_data = json.load(f)
+
+    assert feed_fail_data["feeds_failed"] > 0
+    failed_statuses = [s for s in feed_fail_data["feed_status"] if s["status"] == "failed"]
+    assert len(failed_statuses) > 0
+    assert failed_statuses[0]["error"] is not None
+    assert "Connection refused" in failed_statuses[0]["error"]
+
+    # 3. LLM fallback: verify gemini_fallback_used == True when LLM falls back
+    monkeypatch.setattr(
+        "src.ingest.rss.RSSFeedParser.parse_feed",
+        lambda url, category="", outlet="", timeout=10.0: [sample_article],
+    )
+
+    def mock_llm_error(*args, **kwargs):
+        raise GeminiAPIError("503 Service Unavailable")
+
+    monkeypatch.setattr(
+        "src.llm.client.GeminiClient.generate_json",
+        mock_llm_error,
+    )
+
+    out_llm_fail = tmp_path / "telemetry_llm_fail"
+    run_pipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=out_llm_fail,
+        dry_run=True,
+        date="2026-10-25",
+    )
+
+    with open(out_llm_fail / "telemetry" / "latest.json", "r", encoding="utf-8") as f:
+        llm_fail_data = json.load(f)
+
+    assert llm_fail_data["gemini_fallback_used"] is True
+
+
+def test_timestamped_archive_and_day_level_generation(
+    tmp_path: Path,
+    mock_feeds_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify write_outputs generates timestamped archive, day-level archive, and manifest.json."""
+    sample_article = Article(
+        id="art-1",
+        title="테스트 헤드라인 기사",
+        summary="테스트 요약 내용입니다.",
+        url="https://example.com/news/1",
+        outlet="테스트 언론",
+        published_at="2026-10-25T14:30:15+00:00",
+        category="정치",
+        category_id=1,
+    )
+
+    monkeypatch.setattr(
+        "src.ingest.rss.RSSFeedParser.parse_feed",
+        lambda url, category="", outlet="", timeout=10.0: [sample_article],
+    )
+
+    out_dir = tmp_path / "data_timestamped"
+    run_pipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=out_dir,
+        dry_run=True,
+        date="2026-10-25T14:30:15Z",
+    )
+
+    archive_dir = out_dir / "archive"
+    day_file = archive_dir / "2026-10-25.json"
+    timestamped_file = archive_dir / "2026-10-25_143015.json"
+    manifest_file = archive_dir / "manifest.json"
+
+    assert day_file.is_file(), "Day-level archive 2026-10-25.json must be generated"
+    assert timestamped_file.is_file(), "Timestamped archive 2026-10-25_143015.json must be generated"
+    assert manifest_file.is_file(), "Manifest file manifest.json must be generated"
+
+    with open(day_file, "r", encoding="utf-8") as f:
+        day_data = json.load(f)
+    with open(timestamped_file, "r", encoding="utf-8") as f:
+        ts_data = json.load(f)
+    with open(manifest_file, "r", encoding="utf-8") as f:
+        manifest_data = json.load(f)
+
+    assert day_data["briefingDate"] == "2026-10-25T14:30:15+00:00"
+    assert ts_data["briefingDate"] == "2026-10-25T14:30:15+00:00"
+
+    assert "archives" in manifest_data
+    assert "totalRuns" in manifest_data
+    assert manifest_data["totalRuns"] == len(manifest_data["archives"])
+
+    ts_entries = [e for e in manifest_data["archives"] if e["filename"] == "2026-10-25_143015.json"]
+    assert len(ts_entries) == 1
+    ts_entry = ts_entries[0]
+    assert ts_entry["date"] == "2026-10-25"
+    assert ts_entry["time"] == "14:30:15"
+    assert ts_entry["briefingDate"] == "2026-10-25T14:30:15+00:00"
+    assert isinstance(ts_entry["topHeadlines"], list)
+    assert isinstance(ts_entry["totalArticles"], int)
+    assert ts_entry["totalArticles"] > 0
+
+
+def test_multiple_intraday_runs_preserve_archives(
+    tmp_path: Path,
+    mock_feeds_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify multiple intra-day runs create distinct timestamped archives without overwriting."""
+    out_dir = tmp_path / "data_multirun"
+
+    article_morning = Article(
+        id="art-morning",
+        title="오전 속보 헤드라인",
+        summary="오전 주요 뉴스 내용입니다.",
+        url="https://example.com/morning",
+        outlet="테스트 언론",
+        published_at="2026-10-25T09:00:00+00:00",
+        category="정치",
+        category_id=1,
+    )
+
+    article_afternoon = Article(
+        id="art-afternoon",
+        title="오후 긴급 속보 헤드라인",
+        summary="오후 주요 뉴스 내용입니다.",
+        url="https://example.com/afternoon",
+        outlet="테스트 언론",
+        published_at="2026-10-25T16:45:00+00:00",
+        category="경제·금융",
+        category_id=2,
+    )
+
+    # Run 1: Morning
+    monkeypatch.setattr(
+        "src.ingest.rss.RSSFeedParser.parse_feed",
+        lambda url, category="", outlet="", timeout=10.0: [article_morning],
+    )
+    run_pipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=out_dir,
+        dry_run=True,
+        date="2026-10-25T09:00:00Z",
+    )
+
+    morning_file = out_dir / "archive" / "2026-10-25_090000.json"
+    assert morning_file.is_file()
+    with open(morning_file, "r", encoding="utf-8") as f:
+        morning_content = json.load(f)
+
+    # Run 2: Afternoon
+    monkeypatch.setattr(
+        "src.ingest.rss.RSSFeedParser.parse_feed",
+        lambda url, category="", outlet="", timeout=10.0: [article_afternoon],
+    )
+    run_pipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=out_dir,
+        dry_run=True,
+        date="2026-10-25T16:45:00Z",
+    )
+
+    afternoon_file = out_dir / "archive" / "2026-10-25_164500.json"
+    assert afternoon_file.is_file()
+    with open(afternoon_file, "r", encoding="utf-8") as f:
+        afternoon_content = json.load(f)
+
+    # Verify both timestamped files exist independently and retain distinct content
+    assert morning_file.is_file()
+    with open(morning_file, "r", encoding="utf-8") as f:
+        morning_recheck = json.load(f)
+    assert morning_recheck == morning_content, "Morning archive was not overwritten"
+
+    # Day-level file points to the latest run
+    day_file = out_dir / "archive" / "2026-10-25.json"
+    assert day_file.is_file()
+    with open(day_file, "r", encoding="utf-8") as f:
+        day_content = json.load(f)
+    assert day_content == afternoon_content, "Day-level archive updated to afternoon run"
+
+    # Verify manifest has both runs in reverse chronological order
+    manifest_file = out_dir / "archive" / "manifest.json"
+    assert manifest_file.is_file()
+    with open(manifest_file, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    filenames = [e["filename"] for e in manifest["archives"]]
+    assert "2026-10-25_164500.json" in filenames
+    assert "2026-10-25_090000.json" in filenames
+
+    idx_pm = filenames.index("2026-10-25_164500.json")
+    idx_am = filenames.index("2026-10-25_090000.json")
+    assert idx_pm < idx_am, "Afternoon run must precede morning run in manifest (newest first)"
+
+
+def test_generate_archive_manifest_indexes_timestamped_and_legacy(tmp_path: Path) -> None:
+    """Verify generate_archive_manifest indexes timestamped and legacy files with reverse chronological order."""
+    archive_dir = tmp_path / "archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Legacy file without time (YYYY-MM-DD.json)
+    legacy_file_1 = archive_dir / "2026-10-22.json"
+    legacy_file_1.write_text(
+        json.dumps({
+            "briefingDate": "2026-10-22",
+            "topHeadlines": [
+                {"id": 1, "categoryId": 1, "headline": "22일 헤드라인 1", "summary": "요약 1"},
+                {"id": 2, "categoryId": 2, "headline": "22일 헤드라인 2", "summary": "요약 2"},
+            ],
+            "articles": [
+                {"id": 3, "categoryId": 1, "title": "22일 기사 1", "summary": "요약"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+
+    # 2. Legacy file with ISO timestamp in briefingDate (YYYY-MM-DD.json)
+    legacy_file_2 = archive_dir / "2026-10-23.json"
+    legacy_file_2.write_text(
+        json.dumps({
+            "briefingDate": "2026-10-23T08:30:00+00:00",
+            "topHeadlines": [
+                {"id": 1, "categoryId": 1, "headline": "23일 아침 헤드라인", "summary": "요약"},
+            ],
+            "articles": [],
+        }),
+        encoding="utf-8",
+    )
+
+    # 3. Timestamped files (YYYY-MM-DD_HHMMSS.json)
+    ts_file_morning = archive_dir / "2026-10-25_100000.json"
+    ts_file_morning.write_text(
+        json.dumps({
+            "briefingDate": "2026-10-25T10:00:00+00:00",
+            "topHeadlines": [
+                {"id": 1, "categoryId": 1, "headline": "25일 10시 헤드라인", "summary": "요약"},
+            ],
+            "articles": [
+                {"id": 2, "categoryId": 2, "title": "기사 A", "summary": "요약 A"},
+                {"id": 3, "categoryId": 3, "title": "기사 B", "summary": "요약 B"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+
+    ts_file_evening = archive_dir / "2026-10-25_201530.json"
+    ts_file_evening.write_text(
+        json.dumps({
+            "briefingDate": "2026-10-25T20:15:30+00:00",
+            "topHeadlines": [
+                {"id": 1, "categoryId": 1, "headline": "25일 저녁 헤드라인", "summary": "저녁 요약"},
+            ],
+            "articles": [
+                {"id": 2, "categoryId": 1, "title": "기사 1", "summary": "요약 1"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+
+    # 4. Files to be ignored:
+    # Pre-existing manifest.json
+    (archive_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    # Non-json file
+    (archive_dir / "notes.txt").write_text("some notes", encoding="utf-8")
+    # Non-dict json
+    (archive_dir / "array.json").write_text("[1, 2, 3]", encoding="utf-8")
+    # Corrupt json
+    (archive_dir / "2026-10-21.json").write_text("{corrupt json", encoding="utf-8")
+    # Subdirectory
+    (archive_dir / "backup").mkdir()
+
+    manifest = generate_archive_manifest(archive_dir)
+
+    assert manifest["totalRuns"] == 4
+    assert len(manifest["archives"]) == 4
+
+    # Verify reverse chronological sorting
+    filenames = [e["filename"] for e in manifest["archives"]]
+    assert filenames == [
+        "2026-10-25_201530.json",
+        "2026-10-25_100000.json",
+        "2026-10-23.json",
+        "2026-10-22.json",
+    ]
+
+    # Verify evening entry
+    e0 = manifest["archives"][0]
+    assert e0["filename"] == "2026-10-25_201530.json"
+    assert e0["date"] == "2026-10-25"
+    assert e0["time"] == "20:15:30"
+    assert e0["briefingDate"] == "2026-10-25T20:15:30+00:00"
+    assert e0["totalArticles"] == 2
+    assert len(e0["topHeadlines"]) == 1
+
+    # Verify morning entry
+    e1 = manifest["archives"][1]
+    assert e1["filename"] == "2026-10-25_100000.json"
+    assert e1["date"] == "2026-10-25"
+    assert e1["time"] == "10:00:00"
+    assert e1["totalArticles"] == 3
+
+    # Verify legacy file with time in briefingDate
+    e2 = manifest["archives"][2]
+    assert e2["filename"] == "2026-10-23.json"
+    assert e2["date"] == "2026-10-23"
+    assert e2["time"] == "08:30:00"
+    assert e2["totalArticles"] == 1
+
+    # Verify legacy file without time in briefingDate
+    e3 = manifest["archives"][3]
+    assert e3["filename"] == "2026-10-22.json"
+    assert e3["date"] == "2026-10-22"
+    assert e3["time"] == ""
+    assert e3["totalArticles"] == 3
+
+
+def test_generate_archive_manifest_empty_dir(tmp_path: Path) -> None:
+    """Verify generate_archive_manifest handles an empty archive directory gracefully."""
+    empty_archive = tmp_path / "empty_archive"
+    manifest = generate_archive_manifest(empty_archive)
+
+    assert manifest["totalRuns"] == 0
+    assert manifest["archives"] == []
+    assert (empty_archive / "manifest.json").is_file()
+
+

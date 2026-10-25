@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
-from datetime import datetime, time, timezone
+from datetime import datetime, time as dt_time, timezone
 import json
 import logging
 import os
 from pathlib import Path
+import re
 import sys
+import threading
+import time
 from typing import Any
 
 from src.ingest.filter import ArticleFilterPipeline
@@ -107,6 +110,109 @@ def parse_pipeline_date(date_val: str | datetime | None) -> tuple[datetime, str,
     return now, now.strftime("%Y-%m-%d"), s
 
 
+def generate_archive_manifest(archive_dir: Path | str) -> dict[str, Any]:
+    """Scan and index all valid briefing JSON files in archive_dir into manifest.json.
+
+    Scans both timestamped (YYYY-MM-DD_HHMMSS.json) and legacy (YYYY-MM-DD.json) files,
+    ignoring manifest.json, directories, and non-JSON files. Extracts metadata for each run
+    and sorts entries in reverse chronological order (newest first).
+
+    Args:
+        archive_dir: Directory containing historical briefing JSON files.
+
+    Returns:
+        The generated manifest dictionary containing metadata and reverse-chronological archive entries.
+    """
+    archive_path = Path(archive_dir)
+    archive_path.mkdir(parents=True, exist_ok=True)
+
+    filename_pattern = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:_(\d{2})(\d{2})(\d{2}))?\.json$")
+    entries: list[dict[str, Any]] = []
+
+    for file_path in archive_path.iterdir():
+        if not file_path.is_file():
+            continue
+        if file_path.name == "manifest.json" or not file_path.name.endswith(".json"):
+            continue
+
+        match = filename_pattern.match(file_path.name)
+        if not match:
+            continue
+
+        file_date, hh, mm, ss = match.groups()
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as exc:
+            logger.warning("Failed to parse archive JSON file %s: %s", file_path.name, exc)
+            continue
+
+        if not isinstance(data, dict):
+            logger.warning("Skipping non-dict archive JSON %s", file_path.name)
+            continue
+
+        if not any(k in data for k in ("briefingDate", "topHeadlines", "articles")):
+            logger.warning("Skipping non-briefing JSON file %s", file_path.name)
+            continue
+
+        briefing_date = str(data.get("briefingDate") or "")
+
+        if hh is not None:
+            time_str = f"{hh}:{mm}:{ss}"
+        else:
+            time_str = ""
+            if briefing_date and ("T" in briefing_date or " " in briefing_date):
+                try:
+                    b_dt = datetime.fromisoformat(briefing_date.replace("Z", "+00:00"))
+                    time_str = b_dt.strftime("%H:%M:%S")
+                except Exception:
+                    time_str = ""
+
+        top_headlines = data.get("topHeadlines")
+        if not isinstance(top_headlines, list):
+            top_headlines = []
+
+        articles = data.get("articles")
+        if not isinstance(articles, list):
+            articles = []
+
+        total_articles = len(top_headlines) + len(articles)
+
+        entries.append({
+            "filename": file_path.name,
+            "date": file_date,
+            "time": time_str,
+            "briefingDate": briefing_date,
+            "topHeadlines": top_headlines,
+            "totalArticles": total_articles,
+        })
+
+    entries.sort(
+        key=lambda e: (
+            e.get("date") or "",
+            e.get("time") or "",
+            e.get("briefingDate") or "",
+            e.get("filename") or "",
+        ),
+        reverse=True,
+    )
+
+    manifest = {
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "totalRuns": len(entries),
+        "archives": entries,
+    }
+
+    manifest_file = archive_path / "manifest.json"
+    manifest_content = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    with open(manifest_file, "w", encoding="utf-8") as f:
+        f.write(manifest_content)
+
+    logger.info("Generated archive manifest at %s with %d entries", manifest_file, len(entries))
+    return manifest
+
+
 class DailyBriefingPipeline:
     """Orchestrates news feed ingestion, filtering, AI synthesis, and static storage."""
 
@@ -152,6 +258,17 @@ class DailyBriefingPipeline:
                 client = GeminiClient(dry_run=self.dry_run, mock_mode=self.dry_run)
             self.summarizer = NewsSummarizer(client=client)
 
+        self.feeds_attempted: int = 0
+        self.feeds_failed: int = 0
+        self.feed_status: list[dict[str, Any]] = []
+        self.raw_articles_count: int = 0
+        self.filtered_count: int = 0
+        self.category_breakdown: dict[str, int] = {}
+        self.gemini_latency_ms: float = 0.0
+        self.gemini_fallback_used: bool = False
+        self.pipeline_start_time: float = 0.0
+        self._status_lock = threading.Lock()
+
     def load_feeds(self) -> list[FeedSource]:
         """Load verified active feed sources from configuration."""
         sources = load_feed_sources(self.feeds_path)
@@ -166,6 +283,7 @@ class DailyBriefingPipeline:
 
     def _fetch_single_feed(self, feed: FeedSource) -> list[Article]:
         """Safely fetch and parse articles for a single feed source."""
+        t0 = time.perf_counter()
         try:
             articles = RSSFeedParser.parse_feed(
                 url=feed.url,
@@ -178,14 +296,42 @@ class DailyBriefingPipeline:
                     art.category_id = feed.category_id
                 if not art.category and feed.category:
                     art.category = feed.category
+            latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+            entry: dict[str, Any] = {
+                "outlet": feed.name,
+                "url": feed.url,
+                "category": feed.category,
+                "status": "success",
+                "articles_count": len(articles),
+                "latency_ms": latency_ms,
+                "error": None,
+            }
+            with self._status_lock:
+                self.feed_status.append(entry)
             return articles
         except Exception as exc:
+            latency_ms = round((time.perf_counter() - t0) * 1000, 2)
             logger.warning("Failed to fetch feed '%s' (%s): %s", feed.name, feed.url, exc)
+            entry = {
+                "outlet": feed.name,
+                "url": feed.url,
+                "category": feed.category,
+                "status": "failed",
+                "articles_count": 0,
+                "latency_ms": latency_ms,
+                "error": str(exc),
+            }
+            with self._status_lock:
+                self.feed_status.append(entry)
             return []
 
     def fetch_candidate_articles(self, feeds: list[FeedSource]) -> list[Article]:
         """Fetch candidate articles across all active feeds with concurrency and timeout safety."""
+        self.feeds_attempted = len(feeds)
+        self.feed_status = []
         if not feeds:
+            self.feeds_failed = 0
+            self.raw_articles_count = 0
             logger.warning("No active feeds available to fetch.")
             return []
 
@@ -206,23 +352,37 @@ class DailyBriefingPipeline:
                     except Exception as exc:
                         logger.warning("Error fetching articles from feed %s: %s", feed.name, exc)
 
+        self.feeds_failed = sum(1 for s in self.feed_status if s.get("status") == "failed")
+        self.raw_articles_count = len(articles)
+
         logger.info("Ingested %d candidate articles across %d feeds", len(articles), len(feeds))
         return articles
 
     def filter_articles(self, articles: list[Article]) -> list[Article]:
         """Process candidate articles through deduplication, recency, and category quota filter."""
         if not articles:
+            self.filtered_count = 0
+            self.category_breakdown = {}
             return []
 
         filter_pipeline = ArticleFilterPipeline(
             max_hours=24.0,
             max_per_category=5,
             reference_time=self.ref_datetime,
+            min_per_category=2,
+            adaptive_lookback=True,
         )
         grouped = filter_pipeline.process(articles)
         retained: list[Article] = []
         for cat_name, arts in grouped.items():
             retained.extend(arts)
+
+        self.filtered_count = len(retained)
+        category_breakdown: dict[str, int] = {}
+        for art in retained:
+            cat = art.category or "기타"
+            category_breakdown[cat] = category_breakdown.get(cat, 0) + 1
+        self.category_breakdown = category_breakdown
 
         logger.info(
             "Filtered %d candidate articles down to %d retained articles",
@@ -233,18 +393,58 @@ class DailyBriefingPipeline:
 
     def summarize(self, articles: list[Article]) -> dict[str, Any]:
         """Synthesize retained articles into structured daily briefing."""
+        t0 = time.perf_counter()
+        llm_failed = False
+        client = getattr(self.summarizer, "client", None) if self.summarizer else None
+        if client is None:
+            self.gemini_fallback_used = True
+
+        orig_generate = None
+        if client is not None and hasattr(client, "generate_json"):
+            orig_generate = client.generate_json
+
+            def tracked_generate(*args: Any, **kwargs: Any) -> Any:
+                nonlocal llm_failed
+                try:
+                    return orig_generate(*args, **kwargs)
+                except Exception:
+                    llm_failed = True
+                    raise
+
+            client.generate_json = tracked_generate
+
         try:
+            if not self.summarizer:
+                raise RuntimeError("No summarizer configured")
             briefing = self.summarizer.summarize_articles(
                 articles=articles,
                 briefing_date=self.briefing_date,
             )
+            if (
+                llm_failed
+                or getattr(self.summarizer, "fallback", False)
+                or getattr(self.summarizer, "fallback_used", False)
+            ):
+                self.gemini_fallback_used = True
         except Exception as exc:
             logger.warning("Summarization encountered error (%s). Generating fallback.", exc)
-            grouped = self.summarizer.group_articles_by_category(articles)
-            briefing = self.summarizer.extract_fallback_briefing(
-                grouped_articles=grouped,
-                briefing_date=self.briefing_date,
-            )
+            self.gemini_fallback_used = True
+            if self.summarizer:
+                grouped = self.summarizer.group_articles_by_category(articles)
+                briefing = self.summarizer.extract_fallback_briefing(
+                    grouped_articles=grouped,
+                    briefing_date=self.briefing_date,
+                )
+            else:
+                briefing = {
+                    "briefingDate": self.briefing_date,
+                    "topHeadlines": [],
+                    "articles": [],
+                }
+        finally:
+            if client is not None and orig_generate is not None:
+                client.generate_json = orig_generate
+            self.gemini_latency_ms = round((time.perf_counter() - t0) * 1000, 2)
 
         # Enforce sequential integer IDs (1..3 for top headlines, 4..N for articles)
         headlines = briefing.get("topHeadlines", [])
@@ -260,8 +460,12 @@ class DailyBriefingPipeline:
 
         return briefing
 
-    def write_outputs(self, briefing: dict[str, Any]) -> tuple[Path, Path]:
-        """Write dynamic daily briefing to latest.json and historical archive."""
+    def write_outputs(
+        self,
+        briefing: dict[str, Any],
+        pipeline_latency_ms: float | None = None,
+    ) -> tuple[Path, Path]:
+        """Write dynamic daily briefing to latest.json and historical archive, and telemetry."""
         output_path = self.output_dir
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -271,6 +475,12 @@ class DailyBriefingPipeline:
         latest_path = output_path / "latest.json"
         archive_path = archive_dir / f"{self.date_str}.json"
 
+        if isinstance(self.ref_datetime, datetime):
+            timestamp_str = self.ref_datetime.strftime("%Y-%m-%d_%H%M%S")
+        else:
+            timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
+        timestamped_archive_path = archive_dir / f"{timestamp_str}.json"
+
         content = json.dumps(briefing, ensure_ascii=False, indent=2) + "\n"
 
         with open(latest_path, "w", encoding="utf-8") as f:
@@ -279,18 +489,69 @@ class DailyBriefingPipeline:
         with open(archive_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        logger.info("Saved latest briefing to %s and archive to %s", latest_path, archive_path)
+        with open(timestamped_archive_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.info(
+            "Saved latest briefing to %s, day archive to %s, and timestamped archive to %s",
+            latest_path,
+            archive_path,
+            timestamped_archive_path,
+        )
+
+        generate_archive_manifest(archive_dir)
+
+        if pipeline_latency_ms is None:
+            if self.pipeline_start_time > 0:
+                pipeline_latency_ms = round((time.perf_counter() - self.pipeline_start_time) * 1000, 2)
+            else:
+                pipeline_latency_ms = 0.0
+
+        telemetry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "date": self.date_str,
+            "feeds_attempted": self.feeds_attempted,
+            "feeds_failed": self.feeds_failed,
+            "raw_articles_count": self.raw_articles_count,
+            "filtered_count": self.filtered_count,
+            "gemini_latency_ms": self.gemini_latency_ms,
+            "gemini_fallback_used": self.gemini_fallback_used,
+            "category_breakdown": self.category_breakdown,
+            "feed_status": self.feed_status,
+            "pipeline_latency_ms": pipeline_latency_ms,
+        }
+
+        telemetry_dir = output_path / "telemetry"
+        telemetry_dir.mkdir(parents=True, exist_ok=True)
+
+        telemetry_latest_path = telemetry_dir / "latest.json"
+        telemetry_archive_path = telemetry_dir / f"{self.date_str}.json"
+
+        telemetry_json = json.dumps(telemetry, ensure_ascii=False, indent=2) + "\n"
+        with open(telemetry_latest_path, "w", encoding="utf-8") as f:
+            f.write(telemetry_json)
+        with open(telemetry_archive_path, "w", encoding="utf-8") as f:
+            f.write(telemetry_json)
+
+        logger.info("Saved telemetry to %s and %s", telemetry_latest_path, telemetry_archive_path)
+
         return latest_path, archive_path
 
     def run(self) -> dict[str, Any]:
         """Execute the end-to-end news briefing pipeline."""
+        self.pipeline_start_time = time.perf_counter()
         logger.info("Starting Daily Korea News Briefing pipeline (dry_run=%s)", self.dry_run)
         feeds = self.load_feeds()
         candidates = self.fetch_candidate_articles(feeds)
         retained = self.filter_articles(candidates)
         briefing = self.summarize(retained)
         self.write_outputs(briefing)
-        logger.info("Pipeline completed successfully for date %s", self.date_str)
+        pipeline_latency_ms = round((time.perf_counter() - self.pipeline_start_time) * 1000, 2)
+        logger.info(
+            "Pipeline completed successfully for date %s (latency: %.2fms)",
+            self.date_str,
+            pipeline_latency_ms,
+        )
         return briefing
 
 
