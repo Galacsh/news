@@ -1,0 +1,95 @@
+{
+  "categories": [
+    {
+      "id": 1,
+      "name": "정치",
+      "badgeColor": "blue",
+      "aliases": [
+        "정치·사법"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "경제·금융",
+      "badgeColor": "emerald",
+      "aliases": [
+        "경제",
+        "금융"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "산업·기업",
+      "badgeColor": "indigo",
+      "aliases": [
+        "산업",
+        "기업"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "사회",
+      "badgeColor": "violet",
+      "aliases": [
+        "사회·사건"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "국제·글로벌",
+      "badgeColor": "orange",
+      "aliases": [
+        "국제",
+        "글로벌"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "AI·빅테크",
+      "badgeColor": "cyan",
+      "aliases": [
+        "AI",
+        "인공지능",
+        "빅테크"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "IT·통신",
+      "badgeColor": "teal",
+      "aliases": [
+        "IT",
+        "통신",
+        "모바일"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "문화·콘텐츠",
+      "badgeColor": "pink",
+      "aliases": [
+        "문화",
+        "콘텐츠",
+        "연예"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "스포츠",
+      "badgeColor": "rose",
+      "aliases": [
+        "체육"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "라이프스타일",
+      "badgeColor": "amber",
+      "aliases": [
+        "생활",
+        "건강",
+        "라이프"
+      ]
+    }
+  ]
+}
