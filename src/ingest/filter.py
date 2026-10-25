@@ -160,7 +160,7 @@ def deduplicate_articles(
 
 def filter_by_recency(
     articles: list[Article],
-    max_hours: float = 48.0,
+    max_hours: float = 24.0,
     reference_time: datetime | None = None,
 ) -> list[Article]:
     """Filter out articles older than max_hours relative to reference_time.
@@ -302,7 +302,7 @@ class ArticleFilterPipeline:
     def __init__(
         self,
         categories: list[str] | None = None,
-        max_hours: float = 48.0,
+        max_hours: float = 24.0,
         max_per_category: int = 5,
         title_similarity_threshold: float = 0.8,
         reference_time: datetime | None = None,
