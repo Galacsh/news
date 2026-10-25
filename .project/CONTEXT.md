@@ -30,6 +30,7 @@ Data Invariants & Partitioning:
 | DEC-0003 | Separate invariant configuration (`data/categories.json`) from dynamic daily briefing (`data/latest.json`) | accepted | 2026-10-25 |
 | DEC-0004 | Extract RSS FeedSource catalog to `data/feeds.json` loaded via `load_feed_sources()` for code-free feed management | accepted | 2026-10-25 |
 | DEC-0005 | Use relational foreign key `categoryId: int` across `data/latest.json`, `data/feeds.json`, and UI rather than literal string names | accepted | 2026-10-25 |
-| DEC-0006 | Client-side refresh toast notification with smart change detection (distinguish updated vs identical data) | accepted | 2026-10-25 |
+| DEC-0006 | Client-side refresh toast notification comparing briefingDate timestamps (distinguish newer vs identical data) | accepted | 2026-10-25 |
 | DEC-0007 | Use official google-genai SDK (from google import genai) with structured JSON schema and exponential backoff retry for news synthesis | accepted | 2026-10-25 |
 | DEC-0008 | Use continuous 1-based sequential integers for all article IDs (top headlines 1..3, articles 4..N) for unambiguous DOM mapping and clean relational schema | accepted | 2026-10-25 |
+| DEC-0009 | Prioritize .env.local over .env for local credential loading, keeping .env as a template and .env.local strictly gitignored | accepted | 2026-10-25 |

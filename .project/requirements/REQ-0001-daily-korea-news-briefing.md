@@ -26,6 +26,10 @@ Deliver an automated daily briefing website of major Korean news published to Gi
   - `briefingDate` in `data/latest.json` must use standard ISO 8601 formatting (`YYYY-MM-DDTHH:mm:ss+09:00` or `YYYY-MM-DD`). The client UI formats this to Korean locale text.
 - **R-DATA-04 (Article Sequential Numbering)**:
   - All articles across `topHeadlines` (1..3) and category `articles` (4..N) must use sequential 1-based integers for their `id` property instead of arbitrary prefix strings (`top-`, `art-`, `pol-`), ensuring unique DOM element targeting and clean schema serialization.
+- **R-DATA-05 (Environment Configuration Hierarchy)**:
+  - Local credentials (`GEMINI_API_KEY`) are loaded with priority from `.env.local` to isolate developer secrets.
+  - `.env` serves as a reference template containing placeholder values.
+  - `.gitignore` strictly excludes `.env.local` and credential patterns to prevent secret leakage in version control.
 
 ### 3.2 RSS Feed Ingestion & Curation
 - **R-FEED-01 (Candidate Pool & Deduplication)**:
@@ -62,8 +66,8 @@ Deliver an automated daily briefing website of major Korean news published to Gi
   - All JSON fetches employ cache-busting query parameter `?_t=${Date.now()}` and `{ cache: "no-cache" }` to prevent stale GitHub Pages / CDN caching.
 - **R-UI-04 (Toast Notification & Change Detection)**:
   - Bottom-centered toast notification system.
-  - If data changed: re-renders views and alerts `"최신 브리핑 데이터로 갱신되었습니다."` (`success`).
-  - If data is identical: alerts `"새로운 변경 사항이 없습니다. (최신 상태 유지 중)"` (`info`).
+  - Compares `briefingDate` timestamps: if newer (`newTime > lastTime`), re-renders views and alerts `"최신 브리핑 데이터로 갱신되었습니다."` (`success`).
+  - If `briefingDate` is not newer (already latest): alerts `"새로운 변경 사항이 없습니다. (최신 상태 유지 중)"` (`info`).
   - If fetch fails: alerts error notification.
 
 ### 3.5 LLM Summarization & Delivery (Slices 2 & 4)

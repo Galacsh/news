@@ -1,6 +1,6 @@
 # SLICE-0003: Daily News Pipeline Orchestration
 
-Status: proposed
+Status: completed
 Source: REQ-0001
 
 ## Outcome & Boundaries
@@ -19,10 +19,17 @@ Source: REQ-0001
 ## Tasks & Batches
 | Task ID | Batch | Title | Locked Files | Verify Command | Status |
 |---|---|---|---|---|---|
-| TASK-01 | Batch 1 | Assemble end-to-end pipeline runner | `src/pipeline.py` | `pytest tests/test_pipeline.py` | `[ ] pending` |
+| TASK-01 | Batch 1 | Assemble end-to-end pipeline runner | `src/pipeline.py` | `.venv/bin/pytest tests/test_pipeline.py` | [x] verified|
 
 ## Verification Evidence
-NOT RUN
+- `.venv/bin/pytest tests/test_pipeline.py`: 10 passed in 1.73s
+- `.venv/bin/pytest`: 105 passed in 1.88s (full regression test suite clean)
+- TASK-01 verified via `flow.py complete`.
 
 ## Review Findings
-NOT RUN
+- Auditor: `flow_reviewer` (Verdict: **PASS**)
+- AC-1 (End-to-End Orchestration): PASS (feeds -> 24h filter -> Gemini synthesis -> schema normalization).
+- AC-2 (Environment Loading Hierarchy): PASS (.env.local prioritized over .env, preserving pre-existing variables).
+- AC-3 (Disk Persistence): PASS (writes latest.json and archive/YYYY-MM-DD.json adhering to dashboard schema).
+- AC-4 (CLI Support): PASS (supports --dry-run, --feeds-path, --output-dir, --date, --timeout with proper exit codes).
+- AC-5 (Failure Resilience): PASS (isolates per-feed errors, GeminiAPIError extractive fallback, zero crashes on empty input).
