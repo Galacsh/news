@@ -71,19 +71,78 @@
                     </p>
                 </div>
 
-                <!-- Refresh Button (Icon Only) -->
-                <button
-                    type="button"
-                    onclick="handleRefresh()"
-                    id="refreshBtn"
-                    class="w-9 h-9 aspect-square inline-flex items-center justify-center text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm shrink-0"
-                    title="최신 데이터 다시 불러오기"
-                    aria-label="최신 데이터 다시 불러오기"
-                >
-                    <i id="refreshIcon" class="ph-bold ph-arrows-clockwise text-base"></i>
-                </button>
+                <!-- Header Actions (Archive, Notice & Refresh) -->
+                <div class="flex items-center gap-2 shrink-0">
+                    <!-- Archive Explorer Link -->
+                    <a
+                        href="archive.html"
+                        id="archiveLink"
+                        class="w-9 h-9 aspect-square inline-flex items-center justify-center text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm shrink-0"
+                        title="아카이브 탐색"
+                        aria-label="아카이브 탐색"
+                    >
+                        <i class="ph-bold ph-calendar text-base"></i>
+                    </a>
+
+                    <!-- Notice Center Link with Unread Badge -->
+                    <a
+                        href="notices.html"
+                        id="noticeLink"
+                        class="relative w-9 h-9 aspect-square inline-flex items-center justify-center text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm shrink-0"
+                        title="공지사항"
+                        aria-label="공지사항"
+                    >
+                        <i class="ph-bold ph-bell text-base"></i>
+                        <span
+                            id="noticeBadge"
+                            class="hidden absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-slate-900"
+                            aria-label="새 공지사항 있음"
+                        ></span>
+                    </a>
+
+                    <!-- Refresh Button (Icon Only) -->
+                    <button
+                        type="button"
+                        onclick="handleRefresh()"
+                        id="refreshBtn"
+                        class="w-9 h-9 aspect-square inline-flex items-center justify-center text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm shrink-0"
+                        title="최신 데이터 다시 불러오기"
+                        aria-label="최신 데이터 다시 불러오기"
+                    >
+                        <i id="refreshIcon" class="ph-bold ph-arrows-clockwise text-base"></i>
+                    </button>
+                </div>
             </div>
         </header>
+
+        <!-- Archive Notice Banner (shown when viewing historical archive) -->
+        <div
+            id="archiveNoticeBanner"
+            class="hidden bg-amber-500/10 border-b border-amber-500/20 px-4 py-3 sm:px-6 lg:px-8 text-amber-200 text-xs sm:text-sm font-medium"
+        >
+            <div class="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <i class="ph-bold ph-archive text-amber-400 text-base shrink-0"></i>
+                    <span id="archiveNoticeText">과거 브리핑 아카이브를 열람 중입니다.</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a
+                        href="archive.html"
+                        class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 transition"
+                    >
+                        <i class="ph-bold ph-calendar"></i>
+                        아카이브 목록
+                    </a>
+                    <a
+                        href="index.html"
+                        class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-amber-400 text-slate-950 font-semibold hover:bg-amber-300 transition"
+                    >
+                        <i class="ph-bold ph-arrow-counter-clockwise"></i>
+                        최신 브리핑 보기
+                    </a>
+                </div>
+            </div>
+        </div>
 
         <!-- Main Container -->
         <main
@@ -292,7 +351,13 @@
             function renderDate() {
                 const dateElement = document.getElementById("todayDate");
                 if (!dateElement) return;
-                dateElement.innerText = formatLastUpdated(BRIEFING_DATE);
+                const urlParams = new URLSearchParams(window.location.search);
+                const isArchive = urlParams.get("archive") || urlParams.get("date");
+                if (isArchive) {
+                    dateElement.innerHTML = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold mr-1.5 text-xs border border-amber-500/30"><i class="ph-bold ph-archive"></i> 아카이브</span> ${formatLastUpdated(BRIEFING_DATE)}`;
+                } else {
+                    dateElement.innerText = formatLastUpdated(BRIEFING_DATE);
+                }
             }
 
             // 2. Card HTML Builder
@@ -552,9 +617,34 @@
 
             async function fetchLatestData() {
                 const urlParams = new URLSearchParams(window.location.search);
+                const archiveParam = urlParams.get("archive");
                 const dateParam = urlParams.get("date");
-                const targetUrl = dateParam ? `data/archive/${dateParam}.json` : "data/latest.json";
+
+                let targetUrl = "data/latest.json";
+                if (archiveParam) {
+                    const clean = archiveParam.endsWith(".json") ? archiveParam : `${archiveParam}.json`;
+                    targetUrl = `data/archive/${clean}`;
+                } else if (dateParam) {
+                    const clean = dateParam.endsWith(".json") ? dateParam : `${dateParam}.json`;
+                    targetUrl = `data/archive/${clean}`;
+                }
                 return await fetchWithCacheBust(targetUrl);
+            }
+
+            function updateArchiveBanner() {
+                const banner = document.getElementById("archiveNoticeBanner");
+                if (!banner) return;
+                const urlParams = new URLSearchParams(window.location.search);
+                const archiveParam = urlParams.get("archive") || urlParams.get("date");
+                if (archiveParam) {
+                    banner.classList.remove("hidden");
+                    const noticeText = document.getElementById("archiveNoticeText");
+                    if (noticeText) {
+                        noticeText.textContent = `과거 브리핑 아카이브 (${archiveParam})를 열람 중입니다.`;
+                    }
+                } else {
+                    banner.classList.add("hidden");
+                }
             }
 
             function applyNewsPayload(data) {
@@ -574,6 +664,8 @@
                     applyNewsPayload(data);
                     lastBriefingDate = data.briefingDate || data.briefing_date || null;
                     renderAll();
+                    updateArchiveBanner();
+                    checkUnreadNotices();
                 } catch (error) {
                     console.error("Failed to load news payload:", error);
                     renderError(error);
@@ -652,6 +744,8 @@
                     } else {
                         showToast("새로운 변경 사항이 없습니다. (최신 상태 유지 중)", "info");
                     }
+
+                    await checkUnreadNotices();
                 } catch (err) {
                     console.error("Refresh failed:", err);
                     showToast("데이터 갱신에 실패했습니다. 최신 파일을 확인해주세요.", "error");
@@ -661,8 +755,77 @@
                 }
             }
 
-            // Lifecycle Hook
-            window.onload = loadNewsData;
+            // 13. Notice Center unread badge checker (7-day window)
+            async function checkUnreadNotices() {
+                const badge = document.getElementById("noticeBadge");
+                if (!badge) return;
+
+                try {
+                    const response = await fetch(`data/notices.json?t=${Date.now()}`);
+                    if (!response.ok) {
+                        return;
+                    }
+                    const notices = await response.json();
+                    if (!Array.isArray(notices)) {
+                        return;
+                    }
+
+                    // Parse read notice IDs from localStorage safely with fallback to []
+                    let readIds = [];
+                    try {
+                        const raw = localStorage.getItem("read_notice_ids");
+                        if (raw) {
+                            const parsed = JSON.parse(raw);
+                            if (Array.isArray(parsed)) {
+                                readIds = parsed.map(String);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse read_notice_ids from localStorage:", e);
+                    }
+                    const readSet = new Set(readIds);
+
+                    const now = new Date();
+                    const nowMs = now.getTime();
+                    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+                    const oneDayMs = 24 * 60 * 60 * 1000;
+
+                    // A notice is unread if its ID is NOT in read_notice_ids AND its date is within the last 7 days
+                    const hasUnread = notices.some((notice) => {
+                        if (!notice || !notice.id) return false;
+                        if (readSet.has(String(notice.id))) return false;
+                        if (!notice.date) return false;
+
+                        const noticeDate = new Date(notice.date);
+                        if (isNaN(noticeDate.getTime())) return false;
+
+                        const diffMs = nowMs - noticeDate.getTime();
+                        return diffMs <= sevenDaysMs && noticeDate.getTime() <= nowMs + oneDayMs;
+                    });
+
+                    if (hasUnread) {
+                        badge.classList.remove("hidden");
+                    } else {
+                        badge.classList.add("hidden");
+                    }
+                } catch (err) {
+                    console.warn("Notice unread check error:", err);
+                }
+            }
+
+            // Lifecycle Hooks
+            window.onload = () => {
+                loadNewsData();
+                checkUnreadNotices();
+            };
+
+            document.addEventListener("DOMContentLoaded", () => {
+                checkUnreadNotices();
+            });
+
+            window.addEventListener("pageshow", () => {
+                checkUnreadNotices();
+            });
         </script>
 
         <!-- Toast Notification Container (Bottom Centered) -->
