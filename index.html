@@ -247,7 +247,7 @@
             let DISPLAY_DATE = null;
             let TOP_HEADLINES = [];
             let NEWS_DATA = [];
-            let lastPayloadSnapshot = null;
+            let lastBriefingDate = null;
 
             function getCategoryDef(item) {
                 if (item && item.categoryId != null) {
@@ -553,7 +553,7 @@
             async function fetchLatestData() {
                 const urlParams = new URLSearchParams(window.location.search);
                 const dateParam = urlParams.get("date");
-                const targetUrl = dateParam ? `data/${dateParam}.json` : "data/latest.json";
+                const targetUrl = dateParam ? `data/archive/${dateParam}.json` : "data/latest.json";
                 return await fetchWithCacheBust(targetUrl);
             }
 
@@ -572,7 +572,7 @@
                     await loadCategories();
                     const data = await fetchLatestData();
                     applyNewsPayload(data);
-                    lastPayloadSnapshot = JSON.stringify(data);
+                    lastBriefingDate = data.briefingDate || data.briefing_date || null;
                     renderAll();
                 } catch (error) {
                     console.error("Failed to load news payload:", error);
@@ -628,13 +628,25 @@
 
                 try {
                     const data = await fetchLatestData();
-                    const newSnapshot = JSON.stringify(data);
-                    const isChanged = lastPayloadSnapshot !== null && lastPayloadSnapshot !== newSnapshot;
+                    const newBriefingDate = data.briefingDate || data.briefing_date || null;
 
-                    applyNewsPayload(data);
+                    // Determine whether data is newer based on briefingDate timestamp
+                    let isNewer = false;
+                    if (lastBriefingDate === null) {
+                        isNewer = true;
+                    } else if (newBriefingDate) {
+                        const lastTime = new Date(lastBriefingDate).getTime();
+                        const newTime = new Date(newBriefingDate).getTime();
+                        if (!isNaN(lastTime) && !isNaN(newTime) && lastTime > 0) {
+                            isNewer = newTime > lastTime;
+                        } else {
+                            isNewer = newBriefingDate !== lastBriefingDate;
+                        }
+                    }
 
-                    if (isChanged || lastPayloadSnapshot === null) {
-                        lastPayloadSnapshot = newSnapshot;
+                    if (isNewer) {
+                        lastBriefingDate = newBriefingDate;
+                        applyNewsPayload(data);
                         renderAll();
                         showToast("최신 브리핑 데이터로 갱신되었습니다.", "success");
                     } else {
