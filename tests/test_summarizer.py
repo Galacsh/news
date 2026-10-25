@@ -370,15 +370,15 @@ def test_normalize_trims_excess_headlines(sample_articles: list[Article]):
 
 
 def test_empty_candidate_articles():
-    """Verify summarize_articles handles empty input gracefully."""
+    """Verify summarize_articles handles empty input gracefully without dummy placeholders."""
     client = GeminiClient(mock_mode=True)
     summarizer = NewsSummarizer(client=client)
 
     briefing = summarizer.summarize_articles([])
 
     assert "briefingDate" in briefing
-    assert len(briefing["topHeadlines"]) == 3
-    assert isinstance(briefing["articles"], list)
+    assert len(briefing["topHeadlines"]) == 0
+    assert len(briefing["articles"]) == 0
 
 
 def test_briefing_date_datetime_and_string_handling(sample_articles: list[Article]):

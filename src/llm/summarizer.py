@@ -110,6 +110,15 @@ class NewsSummarizer:
         else:
             grouped = self.group_articles_by_category(articles)
 
+        # If no articles were collected, return empty briefing without external LLM call
+        total_articles = sum(len(cat_arts) for cat_arts in grouped.values())
+        if total_articles == 0:
+            return {
+                "briefingDate": briefing_date_str,
+                "topHeadlines": [],
+                "articles": [],
+            }
+
         # Build prompt
         prompt = build_briefing_prompt(grouped, categories=self.categories)
 
@@ -190,23 +199,6 @@ class NewsSummarizer:
                             ],
                         })
 
-        # If still fewer than 3 (e.g. empty candidate set), populate sensible placeholders
-        while len(top_headlines) < 3:
-            idx = len(top_headlines) + 1
-            top_headlines.append({
-                "id": idx,
-                "categoryId": idx,
-                "headline": f"주요 뉴스 속보 {idx}",
-                "summary": "현재 집계 중인 주요 뉴스 핵심 브리핑입니다.",
-                "impact": "관련 동향과 세부 파급 효과를 실시간으로 모니터링 중입니다.",
-                "links": [
-                    {
-                        "title": "연합뉴스 주요 뉴스",
-                        "url": "https://www.yna.co.kr",
-                    }
-                ],
-            })
-
         # Category articles selection (up to 2 per category, continuing sequence from 4)
         art_counter = len(top_headlines) + 1
         for cat_id in sorted(grouped_articles.keys()):
@@ -277,7 +269,7 @@ class NewsSummarizer:
                 "links": links,
             })
 
-        # Ensure exactly 3 topHeadlines
+        # Cap topHeadlines at 3, supplement from extractive fallback if needed
         if len(normalized_headlines) > 3:
             normalized_headlines = normalized_headlines[:3]
         elif len(normalized_headlines) < 3:
@@ -289,17 +281,6 @@ class NewsSummarizer:
                     copy_item = dict(fb_item)
                     copy_item["id"] = f"top-{len(normalized_headlines) + 1}"
                     normalized_headlines.append(copy_item)
-
-            while len(normalized_headlines) < 3:
-                idx = len(normalized_headlines) + 1
-                normalized_headlines.append({
-                    "id": f"top-{idx}",
-                    "categoryId": idx,
-                    "headline": f"주요 뉴스 헤드라인 {idx}",
-                    "summary": "핵심 뉴스 요약 정보입니다.",
-                    "impact": "관련 정책 및 산업에 미치는 파급 효과를 분석 중입니다.",
-                    "links": all_links[:1] or [{"title": "주요 뉴스", "url": "https://www.yna.co.kr"}],
-                })
 
         # Normalize category articles
         raw_articles = raw_data.get("articles")
