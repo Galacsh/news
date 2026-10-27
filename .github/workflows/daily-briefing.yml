@@ -2,7 +2,8 @@ name: Daily News Briefing
 
 on:
   schedule:
-    - cron: '0 22 * * *'
+    - cron: '43 6 * * *'
+      timezone: 'Asia/Seoul'
   workflow_dispatch:
 
 permissions:

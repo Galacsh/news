@@ -25,8 +25,10 @@ def test_workflow_file_exists() -> None:
 def test_workflow_triggers(workflow_content: str) -> None:
     """Verify that schedule cron and workflow_dispatch triggers are configured."""
     assert "on:" in workflow_content
-    cron_match = re.search(r"cron:\s*['\"]0 22 \* \* \*['\"]", workflow_content)
-    assert cron_match is not None, "Expected cron schedule '0 22 * * *' not found"
+    cron_match = re.search(r"cron:\s*['\"]43 6 \* \* \*['\"]", workflow_content)
+    assert cron_match is not None, "Expected cron schedule '43 6 * * *' not found"
+    tz_match = re.search(r"timezone:\s*['\"]Asia/Seoul['\"]", workflow_content)
+    assert tz_match is not None, "Expected timezone 'Asia/Seoul' not found"
     assert "workflow_dispatch:" in workflow_content
 
 
