@@ -1,0 +1,368 @@
+{
+  "list": [
+    {
+      "nm": "아시아경제",
+      "home": "https://www.asiae.co.kr/",
+      "shcutTitl": "아시아경제",
+      "shcutUrl": "https://www.asiae.co.kr/",
+      "bot": false
+    },
+    {
+      "nm": "한국일보",
+      "home": "http://www.hankookilbo.com/",
+      "shcutTitl": "한국일보",
+      "shcutUrl": "http://www.hankookilbo.com/",
+      "bot": false
+    },
+    {
+      "nm": "뉴데일리",
+      "home": "http://www.newdaily.co.kr/",
+      "shcutTitl": "뉴데일리",
+      "shcutUrl": "http://www.newdaily.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "MBN",
+      "home": "http://mbn.mk.co.kr/pages/news/index.html",
+      "shcutTitl": "MBN",
+      "shcutUrl": "http://mbn.mk.co.kr/pages/news/index.html",
+      "bot": true
+    },
+    {
+      "nm": "이데일리",
+      "home": "http://www.edaily.co.kr/",
+      "shcutTitl": "이데일리",
+      "shcutUrl": "http://www.edaily.co.kr/",
+      "bot": false
+    },
+    {
+      "nm": "시사IN",
+      "home": "http://www.sisain.co.kr/",
+      "shcutTitl": "시사IN",
+      "shcutUrl": "http://www.sisain.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "마이데일리",
+      "home": "http://www.mydaily.co.kr/",
+      "shcutTitl": "마이데일리",
+      "shcutUrl": "http://www.mydaily.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "경향신문",
+      "home": "http://www.khan.co.kr/",
+      "shcutTitl": "경향신문",
+      "shcutUrl": "http://www.khan.co.kr/",
+      "bot": false
+    },
+    {
+      "nm": "연합뉴스TV",
+      "home": "http://www.yonhapnewstv.co.kr",
+      "shcutTitl": "연합뉴스TV",
+      "shcutUrl": "http://www.yonhapnewstv.co.kr",
+      "bot": true
+    },
+    {
+      "nm": "매일신문",
+      "home": "http://www.imaeil.com/",
+      "shcutTitl": "매일신문",
+      "shcutUrl": "http://www.imaeil.com/",
+      "bot": true
+    },
+    {
+      "nm": "매일경제",
+      "home": "http://www.mk.co.kr/",
+      "shcutTitl": "매일경제",
+      "shcutUrl": "http://www.mk.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "데일리안",
+      "home": "http://www.dailian.co.kr/",
+      "shcutTitl": "데일리안",
+      "shcutUrl": "http://www.dailian.co.kr/",
+      "bot": false
+    },
+    {
+      "nm": "KBS World",
+      "home": "http://world.kbs.co.kr/english/",
+      "shcutTitl": "KBS World",
+      "shcutUrl": "http://world.kbs.co.kr/english/",
+      "bot": true
+    },
+    {
+      "nm": "프레시안",
+      "home": "https://www.pressian.com/",
+      "shcutTitl": "프레시안",
+      "shcutUrl": "https://www.pressian.com/",
+      "bot": true
+    },
+    {
+      "nm": "문화일보",
+      "home": "http://www.munhwa.com/",
+      "shcutTitl": "문화일보",
+      "shcutUrl": "http://www.munhwa.com/",
+      "bot": false
+    },
+    {
+      "nm": "서울신문",
+      "home": "http://www.seoul.co.kr/",
+      "shcutTitl": "서울신문",
+      "shcutUrl": "http://www.seoul.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "MBC",
+      "home": "http://imnews.imbc.com/",
+      "shcutTitl": "MBC",
+      "shcutUrl": "http://imnews.imbc.com/",
+      "bot": false
+    },
+    {
+      "nm": "KBS",
+      "home": "http://news.kbs.co.kr",
+      "shcutTitl": "KBS",
+      "shcutUrl": "http://news.kbs.co.kr",
+      "bot": false
+    },
+    {
+      "nm": "OSEN",
+      "home": "http://osen.mt.co.kr/",
+      "shcutTitl": "OSEN",
+      "shcutUrl": "http://osen.mt.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "뉴시스",
+      "home": "http://www.newsis.com",
+      "shcutTitl": "뉴시스",
+      "shcutUrl": "http://www.newsis.com",
+      "bot": true
+    },
+    {
+      "nm": "한겨레",
+      "home": "http://www.hani.co.kr/",
+      "shcutTitl": "한겨레",
+      "shcutUrl": "http://www.hani.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "국민일보",
+      "home": "http://www.kmib.co.kr/news/index.asp",
+      "shcutTitl": "국민일보",
+      "shcutUrl": "http://www.kmib.co.kr/news/index.asp",
+      "bot": true
+    },
+    {
+      "nm": "블로터",
+      "home": "http://www.bloter.net/",
+      "shcutTitl": "블로터",
+      "shcutUrl": "http://www.bloter.net/",
+      "bot": false
+    },
+    {
+      "nm": "노컷뉴스",
+      "home": "http://www.nocutnews.co.kr/",
+      "shcutTitl": "노컷뉴스",
+      "shcutUrl": "http://www.nocutnews.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "머니투데이",
+      "home": "http://www.mt.co.kr/",
+      "shcutTitl": "머니투데이",
+      "shcutUrl": "http://www.mt.co.kr/",
+      "bot": false
+    },
+    {
+      "nm": "동아일보",
+      "home": "http://www.donga.com/",
+      "shcutTitl": "동아일보",
+      "shcutUrl": "http://www.donga.com/",
+      "bot": true
+    },
+    {
+      "nm": "스포츠서울",
+      "home": "http://www.sportsseoul.com/",
+      "shcutTitl": "스포츠서울",
+      "shcutUrl": "http://www.sportsseoul.com/",
+      "bot": true
+    },
+    {
+      "nm": "오마이뉴스",
+      "home": "http://www.ohmynews.com/",
+      "shcutTitl": "오마이뉴스",
+      "shcutUrl": "http://www.ohmynews.com/",
+      "bot": true
+    },
+    {
+      "nm": "조선비즈",
+      "home": "http://biz.chosun.com/",
+      "shcutTitl": "조선비즈",
+      "shcutUrl": "http://biz.chosun.com/",
+      "bot": false
+    },
+    {
+      "nm": "파이낸셜뉴스",
+      "home": "http://www.fnnews.com/",
+      "shcutTitl": "파이낸셜뉴스",
+      "shcutUrl": "http://www.fnnews.com/",
+      "bot": true
+    },
+    {
+      "nm": "YTN",
+      "home": "http://www.ytn.co.kr/",
+      "shcutTitl": "YTN",
+      "shcutUrl": "http://www.ytn.co.kr/",
+      "bot": false
+    },
+    {
+      "nm": "중앙데일리",
+      "home": "http://koreajoongangdaily.joins.com/",
+      "shcutTitl": "중앙데일리",
+      "shcutUrl": "http://koreajoongangdaily.joins.com/",
+      "bot": false
+    },
+    {
+      "nm": "JTBC",
+      "home": "http://news.jtbc.joins.com",
+      "shcutTitl": "JTBC",
+      "shcutUrl": "http://news.jtbc.joins.com",
+      "bot": true
+    },
+    {
+      "nm": "채널A",
+      "home": "http://www.ichannela.com/news/main/news_main.do",
+      "shcutTitl": "채널A",
+      "shcutUrl": "http://www.ichannela.com/news/main/news_main.do",
+      "bot": false
+    },
+    {
+      "nm": "헤럴드경제",
+      "home": "http://www.heraldbiz.com/",
+      "shcutTitl": "헤럴드경제",
+      "shcutUrl": "http://www.heraldbiz.com/",
+      "bot": false
+    },
+    {
+      "nm": "중앙일보",
+      "home": "https://www.joongang.co.kr/",
+      "shcutTitl": "중앙일보",
+      "shcutUrl": "https://www.joongang.co.kr/",
+      "bot": false
+    },
+    {
+      "nm": "조선일보",
+      "home": "http://www.chosun.com/",
+      "shcutTitl": "조선일보",
+      "shcutUrl": "http://www.chosun.com/",
+      "bot": false
+    },
+    {
+      "nm": "코리아헤럴드",
+      "home": "https://www.koreaherald.com/",
+      "shcutTitl": "코리아헤럴드",
+      "shcutUrl": "https://www.koreaherald.com/",
+      "bot": true
+    },
+    {
+      "nm": "지디넷코리아",
+      "home": "https://zdnet.co.kr/",
+      "shcutTitl": "지디넷코리아",
+      "shcutUrl": "https://zdnet.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "뉴스타파",
+      "home": "http://www.newstapa.org/",
+      "shcutTitl": "뉴스타파",
+      "shcutUrl": "http://www.newstapa.org/",
+      "bot": true
+    },
+    {
+      "nm": "아시아투데이",
+      "home": "http://asiatoday.co.kr/",
+      "shcutTitl": "아시아투데이",
+      "shcutUrl": "http://asiatoday.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "일간스포츠",
+      "home": "http://isplus.joins.com/",
+      "shcutTitl": "일간스포츠",
+      "shcutUrl": "http://isplus.joins.com/",
+      "bot": true
+    },
+    {
+      "nm": "디지털타임스",
+      "home": "http://www.dt.co.kr/",
+      "shcutTitl": "디지털타임스",
+      "shcutUrl": "http://www.dt.co.kr/",
+      "bot": false
+    },
+    {
+      "nm": "스포츠조선",
+      "home": "https://www.sportschosun.com/",
+      "shcutTitl": "스포츠조선",
+      "shcutUrl": "https://www.sportschosun.com/",
+      "bot": true
+    },
+    {
+      "nm": "전자신문",
+      "home": "http://www.etnews.com",
+      "shcutTitl": "전자신문",
+      "shcutUrl": "http://www.etnews.com",
+      "bot": true
+    },
+    {
+      "nm": "SBS",
+      "home": "http://news.sbs.co.kr/indexes/news_index.html",
+      "shcutTitl": "SBS",
+      "shcutUrl": "http://news.sbs.co.kr/indexes/news_index.html",
+      "bot": true
+    },
+    {
+      "nm": "아이뉴스24",
+      "home": "http://www.inews24.com/",
+      "shcutTitl": "아이뉴스24",
+      "shcutUrl": "http://www.inews24.com/",
+      "bot": true
+    },
+    {
+      "nm": "한국경제TV",
+      "home": "http://www.wowtv.co.kr/",
+      "shcutTitl": "한국경제TV",
+      "shcutUrl": "http://www.wowtv.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "서울경제",
+      "home": "http://www.sedaily.com/",
+      "shcutTitl": "서울경제",
+      "shcutUrl": "http://www.sedaily.com/",
+      "bot": false
+    },
+    {
+      "nm": "한국경제",
+      "home": "http://www.hankyung.com/",
+      "shcutTitl": "한국경제",
+      "shcutUrl": "http://www.hankyung.com/",
+      "bot": true
+    },
+    {
+      "nm": "미디어오늘",
+      "home": "http://www.mediatoday.co.kr/",
+      "shcutTitl": "미디어오늘",
+      "shcutUrl": "http://www.mediatoday.co.kr/",
+      "bot": true
+    },
+    {
+      "nm": "세계일보",
+      "home": "http://www.segye.com/",
+      "shcutTitl": "세계일보",
+      "shcutUrl": "http://www.segye.com/",
+      "bot": false
+    }
+  ]
+}
