@@ -90,7 +90,7 @@ def parse_pipeline_date(date_val: str | datetime | None) -> tuple[datetime, str,
                 ref_dt = now
                 iso_str = now.isoformat()
             else:
-                ref_dt = datetime.combine(parsed_d, time(23, 59, 59), tzinfo=timezone.utc)
+                ref_dt = datetime.combine(parsed_d, dt_time(23, 59, 59), tzinfo=timezone.utc)
                 iso_str = f"{date_str}T23:59:59+00:00"
             return ref_dt, date_str, iso_str
         except ValueError:
