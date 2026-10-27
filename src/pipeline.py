@@ -473,7 +473,6 @@ class DailyBriefingPipeline:
         archive_dir.mkdir(parents=True, exist_ok=True)
 
         latest_path = output_path / "latest.json"
-        archive_path = archive_dir / f"{self.date_str}.json"
 
         if isinstance(self.ref_datetime, datetime):
             timestamp_str = self.ref_datetime.strftime("%Y-%m-%d_%H%M%S")
@@ -486,16 +485,12 @@ class DailyBriefingPipeline:
         with open(latest_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        with open(archive_path, "w", encoding="utf-8") as f:
-            f.write(content)
-
         with open(timestamped_archive_path, "w", encoding="utf-8") as f:
             f.write(content)
 
         logger.info(
-            "Saved latest briefing to %s, day archive to %s, and timestamped archive to %s",
+            "Saved latest briefing to %s and timestamped archive to %s",
             latest_path,
-            archive_path,
             timestamped_archive_path,
         )
 
@@ -535,7 +530,7 @@ class DailyBriefingPipeline:
 
         logger.info("Saved telemetry to %s and %s", telemetry_latest_path, telemetry_archive_path)
 
-        return latest_path, archive_path
+        return latest_path, timestamped_archive_path
 
     def run(self) -> dict[str, Any]:
         """Execute the end-to-end news briefing pipeline."""

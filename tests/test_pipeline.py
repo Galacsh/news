@@ -190,10 +190,12 @@ def test_run_pipeline_dry_run_success(
 
     # 1. Output files exist
     latest_file = output_dir / "latest.json"
-    archive_file = output_dir / "archive" / "2026-10-25.json"
+    archive_files = list((output_dir / "archive").glob("2026-10-25_*.json"))
 
     assert latest_file.is_file(), "latest.json must be written"
-    assert archive_file.is_file(), "archive/2026-10-25.json must be written"
+    assert len(archive_files) == 1, "Timestamped archive must be written"
+    assert not (output_dir / "archive" / "2026-10-25.json").exists(), "Day-level archive should not exist"
+    archive_file = archive_files[0]
 
     # 2. Validate JSON structure
     with open(latest_file, "r", encoding="utf-8") as f:
@@ -294,7 +296,8 @@ def test_run_pipeline_network_error_fallback(
     )
 
     assert (output_dir / "latest.json").is_file()
-    assert (output_dir / "archive" / "2026-10-25.json").is_file()
+    assert len(list((output_dir / "archive").glob("2026-10-25_*.json"))) == 1
+    assert not (output_dir / "archive" / "2026-10-25.json").exists()
     assert len(briefing["topHeadlines"]) == 0
     assert len(briefing["articles"]) == 0
 
@@ -347,7 +350,8 @@ def test_run_pipeline_llm_error_fallback(
     )
 
     assert (output_dir / "latest.json").is_file()
-    assert (output_dir / "archive" / "2026-10-25.json").is_file()
+    assert len(list((output_dir / "archive").glob("2026-10-25_*.json"))) == 1
+    assert not (output_dir / "archive" / "2026-10-25.json").exists()
     assert len(briefing["topHeadlines"]) == 3
     assert briefing["topHeadlines"][0]["id"] == 1
     assert "국회 본회의 정치 현안 여야 전격 합의" in briefing["topHeadlines"][0]["headline"]
@@ -395,7 +399,8 @@ def test_cli_main_success(tmp_path: Path, mock_feeds_file: Path) -> None:
 
     assert exit_code == 0
     assert (output_dir / "latest.json").is_file()
-    assert (output_dir / "archive" / "2026-10-25.json").is_file()
+    assert len(list((output_dir / "archive").glob("2026-10-25_*.json"))) == 1
+    assert not (output_dir / "archive" / "2026-10-25.json").exists()
 
 
 def test_cli_main_failure_handled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -429,10 +434,11 @@ def test_cli_subprocess_run(tmp_path: Path, mock_feeds_file: Path) -> None:
     assert res.returncode == 0, f"CLI runner failed with stderr:\n{res.stderr}"
 
     latest_file = tmp_path / "latest.json"
-    archive_file = tmp_path / "archive" / "2026-10-25.json"
+    archive_files = list((tmp_path / "archive").glob("2026-10-25_*.json"))
 
     assert latest_file.is_file(), "latest.json must be created by CLI process"
-    assert archive_file.is_file(), "archive/2026-10-25.json must be created by CLI process"
+    assert len(archive_files) == 1, "Timestamped archive must be created by CLI process"
+    assert not (tmp_path / "archive" / "2026-10-25.json").exists()
 
     with open(latest_file, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -564,12 +570,12 @@ def test_pipeline_telemetry_metrics(
     assert llm_fail_data["gemini_fallback_used"] is True
 
 
-def test_timestamped_archive_and_day_level_generation(
+def test_timestamped_archive_generation_only(
     tmp_path: Path,
     mock_feeds_file: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify write_outputs generates timestamped archive, day-level archive, and manifest.json."""
+    """Verify write_outputs generates timestamped archive and manifest.json without day-level archive."""
     sample_article = Article(
         id="art-1",
         title="테스트 헤드라인 기사",
@@ -599,18 +605,15 @@ def test_timestamped_archive_and_day_level_generation(
     timestamped_file = archive_dir / "2026-10-25_143015.json"
     manifest_file = archive_dir / "manifest.json"
 
-    assert day_file.is_file(), "Day-level archive 2026-10-25.json must be generated"
+    assert not day_file.exists(), "Day-level archive 2026-10-25.json must NOT be generated"
     assert timestamped_file.is_file(), "Timestamped archive 2026-10-25_143015.json must be generated"
     assert manifest_file.is_file(), "Manifest file manifest.json must be generated"
 
-    with open(day_file, "r", encoding="utf-8") as f:
-        day_data = json.load(f)
     with open(timestamped_file, "r", encoding="utf-8") as f:
         ts_data = json.load(f)
     with open(manifest_file, "r", encoding="utf-8") as f:
         manifest_data = json.load(f)
 
-    assert day_data["briefingDate"] == "2026-10-25T14:30:15+00:00"
     assert ts_data["briefingDate"] == "2026-10-25T14:30:15+00:00"
 
     assert "archives" in manifest_data
@@ -698,12 +701,9 @@ def test_multiple_intraday_runs_preserve_archives(
         morning_recheck = json.load(f)
     assert morning_recheck == morning_content, "Morning archive was not overwritten"
 
-    # Day-level file points to the latest run
+    # Day-level file is not created; only timestamped files exist
     day_file = out_dir / "archive" / "2026-10-25.json"
-    assert day_file.is_file()
-    with open(day_file, "r", encoding="utf-8") as f:
-        day_content = json.load(f)
-    assert day_content == afternoon_content, "Day-level archive updated to afternoon run"
+    assert not day_file.exists(), "Day-level archive 2026-10-25.json should not exist"
 
     # Verify manifest has both runs in reverse chronological order
     manifest_file = out_dir / "archive" / "manifest.json"
