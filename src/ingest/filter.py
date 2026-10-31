@@ -158,6 +158,271 @@ def deduplicate_articles(
     return accepted_articles
 
 
+KOREAN_PARTICLES: tuple[str, ...] = (
+    "했다고",
+    "했다는",
+    "있다고",
+    "있다는",
+    "된다고",
+    "한다는",
+    "한다고",
+    "하기로",
+    "하며",
+    "하고",
+    "하고는",
+    "하게",
+    "하지",
+    "했다",
+    "한다",
+    "된다",
+    "됐다",
+    "되는",
+    "하여",
+    "에서",
+    "으로",
+    "에게",
+    "부터",
+    "까지",
+    "에는",
+    "에도",
+    "이란",
+    "처럼",
+    "은",
+    "는",
+    "이",
+    "가",
+    "을",
+    "를",
+    "의",
+    "에",
+    "로",
+    "와",
+    "과",
+    "도",
+    "만",
+)
+
+TOPIC_STOPWORDS: set[str] = {
+    "기자",
+    "뉴스",
+    "오늘",
+    "어제",
+    "지난",
+    "밝혔다",
+    "말했다",
+    "전했다",
+    "따르면",
+    "대해",
+    "대한",
+    "통해",
+    "위해",
+    "위한",
+    "관련",
+    "것으로",
+    "있는",
+    "있다",
+    "했다",
+    "등의",
+    "이를",
+    "이번",
+    "이에",
+    "라며",
+    "하는",
+    "된다",
+    "됐다",
+    "사진",
+    "단독",
+    "속보",
+    "이달",
+    "오는",
+}
+
+
+def extract_topic_keywords(text: str) -> set[str]:
+    """Tokenize text into keywords (Hangul words/nouns, numbers, alphanumeric)."""
+    if not text:
+        return set()
+
+    clean = re.sub(r"<[^>]+>", " ", text)
+    clean = re.sub(r"^[\[\(][^\]\)]+[\]\)]\s*", "", clean)
+
+    raw_tokens = re.findall(r"[가-힣a-zA-Z0-9]+", clean.lower())
+    keywords: set[str] = set()
+
+    for token in raw_tokens:
+        if token in TOPIC_STOPWORDS:
+            continue
+
+        stripped = token
+        for p in KOREAN_PARTICLES:
+            if len(token) > len(p) + 1 and token.endswith(p):
+                stripped = token[: -len(p)]
+                break
+
+        if stripped in TOPIC_STOPWORDS:
+            continue
+
+        if len(stripped) >= 2 or stripped.isdigit():
+            keywords.add(stripped)
+
+    return keywords
+
+
+def calculate_jaccard_similarity(set_a: set[str], set_b: set[str]) -> float:
+    """Compute token Jaccard similarity between two keyword sets."""
+    if not set_a or not set_b:
+        return 0.0
+    intersection = len(set_a & set_b)
+    if not intersection:
+        return 0.0
+    union = len(set_a | set_b)
+    return intersection / union if union > 0 else 0.0
+
+
+def cluster_articles_by_topic(
+    articles: list[Article],
+    similarity_threshold: float = 0.35,
+    reference_time: datetime | None = None,
+) -> list[Article]:
+    """Cluster articles covering the same topic across outlets and rank by consensus.
+
+    1. Tokenize title and summary into keywords (Hangul words/nouns, numbers, alphanumeric).
+    2. Group articles covering the same topic via token Jaccard similarity.
+    3. For each cluster, pick the best representative (longest title/summary, newest).
+    4. Attach other articles in the cluster as related_links:
+       [{"title": a.title, "url": a.url}, ...] to the representative.
+    5. Rank clusters by Consensus Score: `(distinct_outlets_count * 10) + recency_score`
+       so stories covered by multiple independent outlets rank higher than single-outlet stories.
+
+    Args:
+        articles: List of Article instances to cluster.
+        similarity_threshold: Jaccard similarity threshold for clustering (default: 0.35).
+        reference_time: Optional reference datetime for recency scoring.
+
+    Returns:
+        List of cluster representative Article instances ranked by Consensus Score descending.
+    """
+    if not articles:
+        return []
+
+    if len(articles) == 1:
+        rep = articles[0]
+        if rep.raw_data is None:
+            rep.raw_data = {}
+        rep.raw_data["consensus_score"] = 10.0 + 1.0
+        rep.raw_data["distinct_outlets_count"] = 1
+        rep.raw_data["cluster_size"] = 1
+        return [rep]
+
+    article_tokens = [
+        extract_topic_keywords(f"{a.title} {a.summary}") for a in articles
+    ]
+
+    n = len(articles)
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        path = []
+        while parent[i] != i:
+            path.append(i)
+            i = parent[i]
+        for node in path:
+            parent[node] = i
+        return i
+
+    def union(i: int, j: int) -> None:
+        root_i = find(i)
+        root_j = find(j)
+        if root_i != root_j:
+            parent[root_j] = root_i
+
+    for i in range(n):
+        tokens_i = article_tokens[i]
+        if not tokens_i:
+            continue
+        for j in range(i + 1, n):
+            tokens_j = article_tokens[j]
+            if not tokens_j:
+                continue
+            sim = calculate_jaccard_similarity(tokens_i, tokens_j)
+            if sim >= similarity_threshold:
+                union(i, j)
+
+    clusters: dict[int, list[Article]] = {}
+    for i, article in enumerate(articles):
+        root = find(i)
+        if root not in clusters:
+            clusters[root] = []
+        clusters[root].append(article)
+
+    parsed_timestamps = [
+        (
+            parse_iso_datetime(a.published_at)
+            or datetime.min.replace(tzinfo=timezone.utc)
+        ).timestamp()
+        for a in articles
+    ]
+    min_ts = min(parsed_timestamps) if parsed_timestamps else 0.0
+    max_ts = max(parsed_timestamps) if parsed_timestamps else 0.0
+
+    cluster_representatives: list[tuple[float, float, Article]] = []
+
+    for cluster_members in clusters.values():
+        def _representative_sort_key(a: Article) -> tuple[int, float]:
+            length = len(a.title.strip()) + len((a.summary or "").strip())
+            dt = parse_iso_datetime(a.published_at) or datetime.min.replace(tzinfo=timezone.utc)
+            return (length, dt.timestamp())
+
+        sorted_members = sorted(cluster_members, key=_representative_sort_key, reverse=True)
+        rep = sorted_members[0]
+        other_members = sorted_members[1:]
+
+        sorted_others = sorted(
+            other_members,
+            key=lambda a: parse_iso_datetime(a.published_at)
+            or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        seen_urls = {rep.url}
+        related_links: list[dict[str, str]] = []
+        for other in sorted_others:
+            if other.url and other.url not in seen_urls:
+                seen_urls.add(other.url)
+                related_links.append({"title": other.title, "url": other.url})
+        rep.related_links = related_links
+
+        outlets = {m.outlet.strip() for m in cluster_members if m.outlet and m.outlet.strip()}
+        distinct_outlets_count = max(1, len(outlets))
+
+        member_dts = [
+            parse_iso_datetime(m.published_at) or datetime.min.replace(tzinfo=timezone.utc)
+            for m in cluster_members
+        ]
+        cluster_newest_dt = (
+            max(member_dts) if member_dts else datetime.min.replace(tzinfo=timezone.utc)
+        )
+        cluster_ts = cluster_newest_dt.timestamp()
+
+        if max_ts > min_ts:
+            recency_score = (cluster_ts - min_ts) / (max_ts - min_ts)
+        else:
+            recency_score = 1.0
+
+        consensus_score = (distinct_outlets_count * 10.0) + recency_score
+
+        if rep.raw_data is None:
+            rep.raw_data = {}
+        rep.raw_data["consensus_score"] = consensus_score
+        rep.raw_data["distinct_outlets_count"] = distinct_outlets_count
+        rep.raw_data["cluster_size"] = len(cluster_members)
+
+        cluster_representatives.append((consensus_score, cluster_ts, rep))
+
+    cluster_representatives.sort(key=lambda item: (item[0], item[1]), reverse=True)
+
+    return [item[2] for item in cluster_representatives]
+
+
 def filter_by_recency(
     articles: list[Article],
     max_hours: float = 24.0,
@@ -241,8 +506,11 @@ def group_and_trim_by_category(
         for cat, items in grouped_dynamic.items():
             sorted_items = sorted(
                 items,
-                key=lambda art: parse_iso_datetime(art.published_at)
-                or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda art: (
+                    (art.raw_data or {}).get("consensus_score", 0.0),
+                    parse_iso_datetime(art.published_at)
+                    or datetime.min.replace(tzinfo=timezone.utc),
+                ),
                 reverse=True,
             )
             result_dynamic[cat] = sorted_items[:max_per_category]
@@ -282,13 +550,16 @@ def group_and_trim_by_category(
         if matched_target_cat and matched_target_cat in grouped:
             grouped[matched_target_cat].append(article)
 
-    # Sort each category by published_at descending and trim
+    # Sort each category by consensus_score then published_at descending and trim
     trimmed: dict[str, list[Article]] = {}
     for cat, items in grouped.items():
         sorted_items = sorted(
             items,
-            key=lambda art: parse_iso_datetime(art.published_at)
-            or datetime.min.replace(tzinfo=timezone.utc),
+            key=lambda art: (
+                (art.raw_data or {}).get("consensus_score", 0.0),
+                parse_iso_datetime(art.published_at)
+                or datetime.min.replace(tzinfo=timezone.utc),
+            ),
             reverse=True,
         )
         trimmed[cat] = sorted_items[:max_per_category]
@@ -305,6 +576,8 @@ def apply_adaptive_lookback(
     reference_time: datetime | None = None,
     max_per_category: int = 5,
     title_similarity_threshold: float = 0.8,
+    cluster_similarity_threshold: float = 0.35,
+    enable_clustering: bool = True,
 ) -> dict[str, list[Article]]:
     """Filter articles with adaptive category lookback fallback.
 
@@ -320,6 +593,8 @@ def apply_adaptive_lookback(
         reference_time: Reference datetime for recency calculation.
         max_per_category: Maximum number of articles per category.
         title_similarity_threshold: Threshold ratio for title deduplication.
+        cluster_similarity_threshold: Jaccard similarity threshold for topic clustering.
+        enable_clustering: Whether to run cross-outlet consensus clustering.
 
     Returns:
         Dictionary mapping category names to lists of unique, trimmed Article instances.
@@ -341,9 +616,19 @@ def apply_adaptive_lookback(
         title_similarity_threshold=title_similarity_threshold,
     )
 
+    # Step 1.5: Cross-outlet consensus clustering
+    if enable_clustering:
+        processed_articles = cluster_articles_by_topic(
+            deduped_articles,
+            similarity_threshold=cluster_similarity_threshold,
+            reference_time=reference_time,
+        )
+    else:
+        processed_articles = deduped_articles
+
     # Step 2: Primary recency filtering and category grouping
     recent_articles = filter_by_recency(
-        deduped_articles,
+        processed_articles,
         max_hours=max_hours,
         reference_time=reference_time,
     )
@@ -362,7 +647,7 @@ def apply_adaptive_lookback(
     if deficient_categories:
         effective_lookback = max(max_lookback_hours, max_hours)
         extended_articles = filter_by_recency(
-            deduped_articles,
+            processed_articles,
             max_hours=effective_lookback,
             reference_time=reference_time,
         )
@@ -391,11 +676,14 @@ def apply_adaptive_lookback(
                 if cand_url:
                     existing_urls.add(cand_url)
 
-            # Sort descending by published_at
+            # Sort descending by consensus score then published_at
             grouped[cat] = sorted(
                 cat_articles,
-                key=lambda art: parse_iso_datetime(art.published_at)
-                or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda art: (
+                    (art.raw_data or {}).get("consensus_score", 0.0),
+                    parse_iso_datetime(art.published_at)
+                    or datetime.min.replace(tzinfo=timezone.utc),
+                ),
                 reverse=True,
             )
 
@@ -403,7 +691,7 @@ def apply_adaptive_lookback(
 
 
 class ArticleFilterPipeline:
-    """Pipeline combining deduplication, recency filtering, category grouping, and quota trimming."""
+    """Pipeline combining deduplication, consensus clustering, recency filtering, category grouping, and quota trimming."""
 
     def __init__(
         self,
@@ -415,6 +703,8 @@ class ArticleFilterPipeline:
         min_per_category: int = 0,
         adaptive_lookback: bool = False,
         max_lookback_hours: float = 72.0,
+        cluster_similarity_threshold: float = 0.35,
+        enable_clustering: bool = True,
     ) -> None:
         """Initialize the filtering pipeline.
 
@@ -427,6 +717,8 @@ class ArticleFilterPipeline:
             min_per_category: Minimum number of articles per category before lookback triggers.
             adaptive_lookback: Whether to enable adaptive lookback fallback.
             max_lookback_hours: Extended recency lookback window in hours.
+            cluster_similarity_threshold: Jaccard similarity threshold for topic clustering.
+            enable_clustering: Whether to run cross-outlet consensus clustering.
         """
         self.categories = list(categories) if categories is not None else None
         self.max_hours = max_hours
@@ -436,6 +728,8 @@ class ArticleFilterPipeline:
         self.min_per_category = min_per_category
         self.adaptive_lookback = adaptive_lookback
         self.max_lookback_hours = max_lookback_hours
+        self.cluster_similarity_threshold = cluster_similarity_threshold
+        self.enable_clustering = enable_clustering
 
     def process(self, articles: list[Article]) -> dict[str, list[Article]]:
         """Run the end-to-end filtering pipeline.
@@ -465,20 +759,30 @@ class ArticleFilterPipeline:
                 title_similarity_threshold=self.title_similarity_threshold,
             )
 
-            # Step 3: Group by category and trim to max quota
+            # Step 3: Cluster articles by topic and rank by consensus
+            if self.enable_clustering:
+                processed_articles = cluster_articles_by_topic(
+                    deduped_articles,
+                    similarity_threshold=self.cluster_similarity_threshold,
+                    reference_time=self.reference_time,
+                )
+            else:
+                processed_articles = deduped_articles
+
+            # Step 4: Group by category and trim to max quota
             target_categories = self.categories
             if target_categories is None:
                 # Preserve order of appearance across unique categories
                 seen_cats: set[str] = set()
                 target_categories = []
-                for art in deduped_articles:
+                for art in processed_articles:
                     cat = art.category or "종합"
                     if cat not in seen_cats:
                         seen_cats.add(cat)
                         target_categories.append(cat)
 
             return group_and_trim_by_category(
-                deduped_articles,
+                processed_articles,
                 categories=target_categories,
                 max_per_category=self.max_per_category,
             )
@@ -504,16 +808,18 @@ class ArticleFilterPipeline:
             reference_time=self.reference_time,
             max_per_category=self.max_per_category,
             title_similarity_threshold=self.title_similarity_threshold,
+            cluster_similarity_threshold=self.cluster_similarity_threshold,
+            enable_clustering=self.enable_clustering,
         )
 
     def process_flat(self, articles: list[Article]) -> list[Article]:
-        """Run the filtering pipeline and return a flattened list sorted by published_at descending.
+        """Run the filtering pipeline and return a flattened list sorted by consensus score and recency.
 
         Args:
             articles: Raw list of ingested Article instances.
 
         Returns:
-            Flattened list of accepted Article instances sorted newest first.
+            Flattened list of accepted Article instances sorted by consensus score and recency.
         """
         grouped = self.process(articles)
         flat_list: list[Article] = []
@@ -522,7 +828,10 @@ class ArticleFilterPipeline:
 
         return sorted(
             flat_list,
-            key=lambda art: parse_iso_datetime(art.published_at)
-            or datetime.min.replace(tzinfo=timezone.utc),
+            key=lambda art: (
+                (art.raw_data or {}).get("consensus_score", 0.0),
+                parse_iso_datetime(art.published_at)
+                or datetime.min.replace(tzinfo=timezone.utc),
+            ),
             reverse=True,
         )

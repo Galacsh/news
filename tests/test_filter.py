@@ -12,9 +12,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.ingest.body_extractor import ArticleBodyExtractor, enrich_articles_with_body
 from src.ingest.filter import (
     ArticleFilterPipeline,
     apply_adaptive_lookback,
+    cluster_articles_by_topic,
     deduplicate_articles,
     filter_by_recency,
     group_and_trim_by_category,
@@ -1058,3 +1060,386 @@ def test_article_filter_pipeline_process_flat_with_lookback():
     assert len(flat) == 2
     assert [a.id for a in flat] == ["p-1", "cul-1"]
     assert parse_iso_datetime(flat[0].published_at) > parse_iso_datetime(flat[1].published_at)
+
+
+# ============================================================================
+# 8. Cross-Outlet Consensus Clustering and Body Extractor Tests
+# ============================================================================
+
+
+def test_article_model_related_links_and_body_serialization():
+    """Verify Article correctly handles related_links and excludes transient body on serialization."""
+    art = Article(
+        id="art-100",
+        title="테스트 기사 제목",
+        summary="기사 요약문",
+        url="https://news.example.com/art1",
+        outlet="테스트언론사",
+        published_at="2026-10-31T10:00:00+00:00",
+        category="정치",
+        related_links=[{"title": "관련 기사 1", "url": "https://news.example.com/rel1"}],
+        body="이것은 메모리 상의 임시 본문 텍스트입니다.",
+    )
+
+    d = art.to_dict()
+    assert "related_links" in d
+    assert len(d["related_links"]) == 1
+    assert d["related_links"][0]["title"] == "관련 기사 1"
+    # body must NOT be serialized in to_dict()
+    assert "body" not in d
+
+    # from_dict reconstruction
+    reconstructed = Article.from_dict(d)
+    assert reconstructed.id == "art-100"
+    assert reconstructed.related_links == [{"title": "관련 기사 1", "url": "https://news.example.com/rel1"}]
+    assert reconstructed.body == ""
+
+
+def test_cluster_articles_by_topic_empty_and_single():
+    """Verify cluster_articles_by_topic handles empty list and single article correctly."""
+    assert cluster_articles_by_topic([]) == []
+
+    art = Article(
+        id="s-1",
+        title="단독 속보 기사",
+        summary="요약문 내용",
+        url="https://news.com/s1",
+        outlet="A언론",
+        published_at="2026-10-31T10:00:00+00:00",
+    )
+    result = cluster_articles_by_topic([art])
+    assert len(result) == 1
+    assert result[0].id == "s-1"
+    assert (result[0].raw_data or {}).get("consensus_score") == 11.0
+
+
+def test_cluster_articles_by_topic_cross_outlet_consensus():
+    """Verify that multiple outlets covering the same breaking story cluster and attach related links."""
+    ref_time = datetime(2026, 10, 31, 12, 0, 0, tzinfo=timezone.utc)
+
+    # 3 articles from 3 outlets covering the exact same event
+    art1 = Article(
+        id="cluster-1",
+        title="정부, 유류세 인하 2개월 추가 연장 결정",
+        summary="정부가 이달 말 종료 예정이던 유류세 한시 인하 조치를 10월 말까지 2개월 추가 연장하기로 했다.",
+        url="https://yonhap.com/news/101",
+        outlet="연합뉴스",
+        published_at=(ref_time - timedelta(minutes=30)).isoformat(),
+        category="경제·금융",
+    )
+    art2 = Article(
+        id="cluster-2",
+        title="유류세 인하 조치 10월까지 2개월 연장... 중동 불안 감안",
+        summary="정부가 유류세 한시 인하 조치를 10월 말까지 2개월 더 연장한다.",
+        url="https://chosun.com/news/202",
+        outlet="조선일보",
+        published_at=(ref_time - timedelta(minutes=20)).isoformat(),
+        category="경제·금융",
+    )
+    art3 = Article(
+        id="cluster-3",
+        title="기재부, 유류세 인하 2개월 연장 발표... 10월까지 유지",
+        summary="기획재정부가 종료 예정이던 유류세 인하 조치를 10월 말까지 2개월 추가 연장한다고 밝혔다.",
+        url="https://mk.co.kr/news/303",
+        outlet="매일경제",
+        published_at=(ref_time - timedelta(minutes=10)).isoformat(),
+        category="경제·금융",
+    )
+
+    # 1 independent story from single outlet
+    art_other = Article(
+        id="other-1",
+        title="한국은행 총재, 국제결제은행 연례총회 참석차 출국",
+        summary="한국은행 총재가 스위스 바젤에서 열리는 BIS 연례총회에 참석하기 위해 출국했다.",
+        url="https://yonhap.com/news/999",
+        outlet="연합뉴스",
+        published_at=(ref_time - timedelta(minutes=5)).isoformat(),
+        category="경제·금융",
+    )
+
+    clusters = cluster_articles_by_topic([art1, art2, art3, art_other])
+
+    # Should have 2 clusters: the consensus story and the independent story
+    assert len(clusters) == 2
+
+    consensus_rep = clusters[0]
+    single_rep = clusters[1]
+
+    assert (consensus_rep.raw_data or {}).get("consensus_score") > 30.0
+    assert (single_rep.raw_data or {}).get("consensus_score") < 20.0
+    assert (consensus_rep.raw_data or {}).get("distinct_outlets_count") == 3
+
+    # Check related_links attached to consensus representative
+    assert len(consensus_rep.related_links) == 2
+    related_urls = [link["url"] for link in consensus_rep.related_links]
+    assert consensus_rep.url not in related_urls
+    for other_url in [art1.url, art2.url, art3.url]:
+        if other_url != consensus_rep.url:
+            assert other_url in related_urls
+
+
+def test_cluster_articles_by_topic_prioritizes_consensus_over_freshness():
+    """Verify that a story with 2 independent outlets ranks higher than a newer story with only 1 outlet."""
+    ref_time = datetime(2026, 10, 31, 12, 0, 0, tzinfo=timezone.utc)
+
+    # Multi-outlet story (published 6 hours ago)
+    c1 = Article(
+        id="m-1",
+        title="삼성전자 3분기 잠정 영업이익 9조원 달성 반도체 부진",
+        summary="삼성전자가 3분기 잠정 영업이익 9조 1천억원을 기록했다고 공시했다.",
+        url="https://o1.com/1",
+        outlet="언론사A",
+        published_at=(ref_time - timedelta(hours=6)).isoformat(),
+    )
+    c2 = Article(
+        id="m-2",
+        title="삼성전자, 3분기 잠정 영업이익 9조원 기록... 시장 기대치 하회",
+        summary="삼성전자 3분기 잠정 실적 집계 결과 영업이익 9조 1000억원으로 집계됐다.",
+        url="https://o2.com/2",
+        outlet="언론사B",
+        published_at=(ref_time - timedelta(hours=6)).isoformat(),
+    )
+
+    # Fresh single-outlet story (published 10 minutes ago)
+    single_fresh = Article(
+        id="s-fresh",
+        title="우주항공청, 차세대 중형위성 발사 성공 발표",
+        summary="우주항공청이 나로우주센터에서 차세대 중형위성을 성공적으로 발사했다고 밝혔다.",
+        url="https://o3.com/3",
+        outlet="언론사C",
+        published_at=(ref_time - timedelta(minutes=10)).isoformat(),
+    )
+
+    ranked = cluster_articles_by_topic([single_fresh, c1, c2])
+
+    assert len(ranked) == 2
+    # The multi-outlet story MUST rank first despite being older
+    assert ranked[0].id in ("m-1", "m-2")
+    assert ranked[1].id == "s-fresh"
+    assert (ranked[0].raw_data or {}).get("consensus_score") >= 20.0
+    assert (ranked[1].raw_data or {}).get("consensus_score") < 15.0
+
+
+def test_cluster_articles_by_topic_representative_selection():
+    """Verify representative selection prefers longest title/summary, breaking ties with recency."""
+    ref_time = datetime(2026, 10, 31, 12, 0, 0, tzinfo=timezone.utc)
+
+    # Short title & summary
+    short_art = Article(
+        id="short",
+        title="한국은행 기준금리 0.25%p 인하 단행",
+        summary="한은이 기준금리를 0.25%포인트 인하했다.",
+        url="https://news.com/short",
+        outlet="A",
+        published_at=(ref_time - timedelta(hours=1)).isoformat(),
+    )
+    # Long descriptive title & summary (older)
+    long_art = Article(
+        id="long",
+        title="한국은행 금융통화위원회 기준금리 0.25%포인트 전격 인하 단행",
+        summary="한국은행 금융통화위원회가 오늘 본회의를 열고 기준금리를 연 3.5%에서 3.25%로 0.25%포인트 인하하며 통화정책 피벗에 나섰다.",
+        url="https://news.com/long",
+        outlet="B",
+        published_at=(ref_time - timedelta(hours=2)).isoformat(),
+    )
+
+    ranked = cluster_articles_by_topic([short_art, long_art])
+    assert len(ranked) == 1
+    # Long descriptive article should be picked as representative
+    assert ranked[0].id == "long"
+    assert len(ranked[0].related_links) == 1
+    assert ranked[0].related_links[0]["url"] == short_art.url
+
+
+def test_pipeline_integration_with_consensus_clustering():
+    """Verify ArticleFilterPipeline processes consensus clusters in category grouping and process_flat."""
+    ref_time = datetime(2026, 10, 31, 12, 0, 0, tzinfo=timezone.utc)
+    pipeline = ArticleFilterPipeline(
+        categories=["경제·금융"],
+        max_hours=24.0,
+        max_per_category=5,
+        enable_clustering=True,
+        reference_time=ref_time,
+    )
+
+    art_cons1 = Article(
+        id="c-1",
+        title="코스피 외국인 대규모 순매수에 2600선 탈환 성공",
+        summary="외국인 투자자들의 집중 매수세에 힘입어 코스피 지수가 2600선을 회복했다.",
+        url="https://news.com/c1",
+        outlet="언론1",
+        published_at=(ref_time - timedelta(hours=3)).isoformat(),
+        category="경제·금융",
+    )
+    art_cons2 = Article(
+        id="c-2",
+        title="코스피, 외국인 순매수 힘입어 2600선 단숨에 회복",
+        summary="코스피가 외국인 순매수세로 2600선을 재탈환했다.",
+        url="https://news.com/c2",
+        outlet="언론2",
+        published_at=(ref_time - timedelta(hours=3)).isoformat(),
+        category="경제·금융",
+    )
+    art_single = Article(
+        id="single-1",
+        title="국고채 3년물 금리 연 2.9%로 하락 마감",
+        summary="채권시장에서 국고채 3년 만기 금리가 하락세를 보였다.",
+        url="https://news.com/s1",
+        outlet="언론1",
+        published_at=(ref_time - timedelta(hours=1)).isoformat(),
+        category="경제·금융",
+    )
+
+    grouped = pipeline.process([art_cons1, art_cons2, art_single])
+    assert len(grouped["경제·금융"]) == 2
+    # The 2-outlet consensus story should be first
+    assert grouped["경제·금융"][0].id in ("c-1", "c-2")
+    assert grouped["경제·금융"][1].id == "single-1"
+
+    flat = pipeline.process_flat([art_cons1, art_cons2, art_single])
+    assert len(flat) == 2
+    assert flat[0].id in ("c-1", "c-2")
+    assert flat[1].id == "single-1"
+
+
+def test_article_body_extractor_html_parsing():
+    """Verify ArticleBodyExtractor cleans script/style tags and extracts from various selectors."""
+    extractor = ArticleBodyExtractor(max_chars=900)
+
+    # 1. <article> selector
+    html_article = """
+    <html><body>
+    <article>
+        <h1>기사 헤드라인</h1>
+        <script>var x = 1;</script>
+        <p>첫 번째 문단 내용입니다.</p>
+        <style>.ad { display: none; }</style>
+        <p>두 번째 문단 내용입니다.</p>
+    </article>
+    </body></html>
+    """
+    body1 = extractor.extract_text_from_html(html_article)
+    assert "첫 번째 문단 내용입니다." in body1
+    assert "두 번째 문단 내용입니다." in body1
+    assert "var x = 1" not in body1
+    assert "display: none" not in body1
+
+    # 2. <div class="article_view"> selector (Daum/Kakao)
+    html_div_class = """
+    <html><body>
+    <div class="article_view">
+        <p>다음 뉴스 본문 단락입니다.</p>
+        <p>상세 설명 단락입니다.</p>
+    </div>
+    </body></html>
+    """
+    body2 = extractor.extract_text_from_html(html_div_class)
+    assert "다음 뉴스 본문 단락입니다." in body2
+    assert "상세 설명 단락입니다." in body2
+
+    # 3. <div id="articleBody"> selector (Naver)
+    html_div_id = """
+    <html><body>
+    <div id="articleBody">
+        <p>네이버 뉴스 본문 단락 1입니다.</p>
+        <p>네이버 뉴스 본문 단락 2입니다.</p>
+    </div>
+    </body></html>
+    """
+    body3 = extractor.extract_text_from_html(html_div_id)
+    assert "네이버 뉴스 본문 단락 1입니다." in body3
+
+    # 4. Fallback <p> tags
+    html_p = """
+    <html><body>
+    <nav>네비게이션 메뉴</nav>
+    <p>일반 문단 텍스트입니다.</p>
+    <footer>하단 저작권 정보</footer>
+    </body></html>
+    """
+    body4 = extractor.extract_text_from_html(html_p)
+    assert "일반 문단 텍스트입니다." in body4
+    assert "네비게이션 메뉴" not in body4
+    assert "하단 저작권 정보" not in body4
+
+
+def test_article_body_extractor_truncation():
+    """Verify extracted body text is truncated to ~900 characters."""
+    extractor = ArticleBodyExtractor(max_chars=900)
+    long_content = "<article><p>" + ("가나다라마바사 " * 150) + "</p></article>"
+    extracted = extractor.extract_text_from_html(long_content)
+    assert len(extracted) <= 900
+    assert len(extracted) > 850
+
+
+def test_article_body_extractor_network_mocking():
+    """Verify ArticleBodyExtractor fetches and enriches article with mocked HTTP response."""
+    extractor = ArticleBodyExtractor()
+    mock_html = b"<html><body><article><p>\xed\x95\x9c\xea\xb5\xad\xec\x9d\x80\xed\x96\x89 \xea\xb8\x88\xeb\xa6\xac \xec\x9d\xb8\xed\x95\x98 \xeb\xb3\xb8\xeb\xac\xb8</p></article></body></html>"
+
+    mock_resp = MagicMock()
+    mock_resp.headers = {"Content-Type": "text/html; charset=utf-8"}
+    mock_resp.read.return_value = mock_html
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = None
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        art = Article(
+            id="mock-1",
+            title="한국은행 금리 인하",
+            summary="기본 요약",
+            url="https://news.example.com/mock-1",
+            outlet="언론사",
+            published_at="2026-10-31T00:00:00Z",
+        )
+        enriched = extractor.enrich_article(art)
+        assert "한국은행 금리 인하 본문" in enriched.body
+
+
+def test_article_body_extractor_network_error_fallback():
+    """Verify ArticleBodyExtractor falls back to article.summary when network request fails."""
+    extractor = ArticleBodyExtractor()
+
+    with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Connection refused")):
+        art = Article(
+            id="fail-1",
+            title="네트워크 실패 기사",
+            summary="네트워크 실패 시 사용되는 안전한 요약문입니다.",
+            url="https://invalid.example.com/fail",
+            outlet="언론사",
+            published_at="2026-10-31T00:00:00Z",
+        )
+        enriched = extractor.enrich_article(art)
+        assert enriched.body == "네트워크 실패 시 사용되는 안전한 요약문입니다."
+
+
+def test_enrich_articles_with_body_concurrent():
+    """Verify enrich_articles_with_body concurrently enriches multiple articles."""
+    mock_html = b"<html><body><article><p>\xec\x84\xb1\xea\xb3\xb5\xec\xa0\x81\xec\x9c\xbc\xeb\xa1\x9c \xec\xb6\x94\xec\xb6\x9c\xeb\x90\x9c \xeb\xb3\xb8\xeb\xac\xb8 \xed\x85\x8d\xec\x8a\xa4\xed\x8a\xb8\xec\x9e\x85\xeb\x8b\x88\xeb\x8b\xa4.</p></article></body></html>"
+
+    mock_resp = MagicMock()
+    mock_resp.headers = {"Content-Type": "text/html; charset=utf-8"}
+    mock_resp.read.return_value = mock_html
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = None
+
+    articles = [
+        Article(
+            id=f"c-{i}",
+            title=f"동시 처리 기사 {i}",
+            summary=f"요약 {i}",
+            url=f"https://news.com/{i}",
+            outlet="언론사",
+            published_at="2026-10-31T00:00:00Z",
+        )
+        for i in range(5)
+    ]
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        enriched_list = enrich_articles_with_body(articles, max_workers=3)
+
+    assert len(enriched_list) == 5
+    for idx, art in enumerate(enriched_list):
+        assert art.id == f"c-{idx}"
+        assert "성공적으로 추출된 본문 텍스트입니다." in art.body
+
