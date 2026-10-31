@@ -59,13 +59,13 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-center justify-between gap-4">
                 <div>
                     <h1
-                        class="text-xl sm:text-2xl font-bold tracking-tight text-white"
+                        class="text-lg sm:text-2xl font-bold tracking-tight text-white break-keep"
                     >
                         대한민국 주요 뉴스 브리핑
                     </h1>
                     <p
                         id="todayDate"
-                        class="text-xs sm:text-sm text-slate-400 font-medium mt-1"
+                        class="text-xs sm:text-sm text-slate-400 font-medium mt-1 break-keep"
                     >
                         <!-- Date populated by script or automation placeholder -->
                     </p>
@@ -123,19 +123,19 @@
             <div class="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
                 <div class="flex items-center gap-2">
                     <i class="ph-bold ph-archive text-amber-400 text-base shrink-0"></i>
-                    <span id="archiveNoticeText">과거 브리핑 아카이브를 열람 중입니다.</span>
+                    <span id="archiveNoticeText" class="break-keep">과거 브리핑 아카이브를 열람 중입니다.</span>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 shrink-0">
                     <a
                         href="archive.html"
-                        class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 transition"
+                        class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 transition whitespace-nowrap shrink-0"
                     >
                         <i class="ph-bold ph-calendar"></i>
                         아카이브 목록
                     </a>
                     <a
                         href="index.html"
-                        class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-amber-400 text-slate-950 font-semibold hover:bg-amber-300 transition"
+                        class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-amber-400 text-slate-950 font-semibold hover:bg-amber-300 transition whitespace-nowrap shrink-0"
                     >
                         <i class="ph-bold ph-arrow-counter-clockwise"></i>
                         최신 브리핑 보기
@@ -190,14 +190,14 @@
                             </span>
                             <h2
                                 id="currentCategoryTitle"
-                                class="text-sm font-bold text-white"
+                                class="text-sm font-bold text-white break-keep"
                             >
                                 분야별 핵심 브리핑
                             </h2>
                         </div>
                         <span
                             id="articleCountBadge"
-                            class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700"
+                            class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0"
                         >
                             0건
                         </span>
@@ -385,14 +385,14 @@
 
             <!-- Row 1: Left Tag & Right Action Link -->
             <div class="flex items-center justify-between gap-2 mb-2.5 shrink-0">
-              <span class="inline-flex items-center justify-center h-[30px] px-3 rounded-lg text-xs font-semibold border ${badgeClass} shrink-0">
+              <span class="inline-flex items-center justify-center h-[30px] px-3 rounded-lg text-xs font-semibold border ${badgeClass} shrink-0 whitespace-nowrap">
                 ${catDef.name}
               </span>
 
               <a
                 href="${detailUrl}"
                 onclick="event.stopPropagation()"
-                class="inline-flex items-center justify-center gap-1.5 h-[30px] px-3 text-xs font-semibold text-sky-400 group-hover:text-sky-300 bg-sky-950/60 group-hover:bg-sky-900/60 rounded-lg border border-sky-800/80 transition shrink-0"
+                class="inline-flex items-center justify-center gap-1.5 h-[30px] px-3 text-xs font-semibold text-sky-400 group-hover:text-sky-300 bg-sky-950/60 group-hover:bg-sky-900/60 rounded-lg border border-sky-800/80 transition shrink-0 whitespace-nowrap"
                 title="상세 분석 보기"
               >
                 <span>자세히 보기</span>
@@ -401,7 +401,7 @@
             </div>
 
             <!-- Row 2: Headline -->
-            <h3 class="text-[15px] sm:text-base font-bold text-white group-hover:text-sky-300 transition-colors leading-snug mb-3 line-clamp-2 shrink-0" title="${item.headline}">
+            <h3 class="text-[15px] sm:text-base font-bold text-white group-hover:text-sky-300 transition-colors leading-snug mb-3 line-clamp-2 shrink-0 break-keep" title="${item.headline}">
               <a href="${detailUrl}" onclick="event.stopPropagation()" class="hover:underline">
                 ${item.headline}
               </a>
