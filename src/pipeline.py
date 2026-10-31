@@ -368,7 +368,7 @@ class DailyBriefingPipeline:
 
         filter_pipeline = ArticleFilterPipeline(
             max_hours=24.0,
-            max_per_category=5,
+            max_per_category=8,
             reference_time=self.ref_datetime,
             min_per_category=2,
             adaptive_lookback=True,
@@ -447,11 +447,109 @@ class DailyBriefingPipeline:
                 client.generate_json = orig_generate
             self.gemini_latency_ms = round((time.perf_counter() - t0) * 1000, 2)
 
-        # Enforce sequential integer IDs (1..3 for top headlines, 4..N for articles) and deepDive
+        if not articles:
+            briefing["briefingDate"] = self.briefing_date
+            briefing["topHeadlines"] = []
+            briefing["articles"] = []
+            return briefing
+
+        # Group candidate articles to enforce category quota and link preservation
+        if self.summarizer:
+            grouped_candidates = self.summarizer.group_articles_by_category(articles)
+        else:
+            grouped_candidates = {}
+            for art in articles:
+                cid = art.category_id or 1
+                grouped_candidates.setdefault(cid, []).append(art)
+
+        active_cids = [cid for cid in sorted(grouped_candidates.keys()) if grouped_candidates[cid]]
+
+        def _make_candidate_links(art: Article) -> list[dict[str, str]]:
+            main_title = f"{art.outlet} - {art.title}" if art.outlet else art.title
+            links: list[dict[str, str]] = [{"title": main_title, "url": art.url}]
+            seen_urls = {art.url}
+            for rlink in getattr(art, "related_links", []) or []:
+                if isinstance(rlink, dict) and rlink.get("url"):
+                    rl_url = str(rlink["url"]).strip()
+                    if rl_url and rl_url not in seen_urls:
+                        seen_urls.add(rl_url)
+                        rl_title = str(rlink.get("title", "")).strip() or art.title
+                        if rlink.get("outlet") and not rl_title.startswith(f"[{rlink['outlet']}]"):
+                            rl_title = f"{rlink['outlet']} - {rl_title}"
+                        links.append({"title": rl_title, "url": rl_url})
+            return links
+
+        all_candidate_urls: set[str] = set()
+        for art in articles:
+            if art.url:
+                all_candidate_urls.add(art.url.strip())
+            for rl in getattr(art, "related_links", []) or []:
+                if isinstance(rl, dict) and rl.get("url"):
+                    all_candidate_urls.add(str(rl["url"]).strip())
+
+        def _enrich_links(item: dict[str, Any], cand: Article) -> None:
+            """Ensure item links retain candidate primary URL and all multi-outlet sibling links."""
+            curr_links = item.get("links")
+            if not isinstance(curr_links, list):
+                curr_links = []
+            # Discard any mock or ungrounded URLs not present in candidate pool
+            sanitized_links = [
+                l
+                for l in curr_links
+                if isinstance(l, dict) and l.get("url") and str(l["url"]).strip() in all_candidate_urls
+            ]
+            seen_urls = {str(l["url"]).strip() for l in sanitized_links}
+            if cand.url and cand.url.strip() not in seen_urls:
+                main_title = f"{cand.outlet} - {cand.title}" if cand.outlet else cand.title
+                sanitized_links.insert(0, {"title": main_title, "url": cand.url.strip()})
+                seen_urls.add(cand.url.strip())
+            for rl in getattr(cand, "related_links", []) or []:
+                if isinstance(rl, dict) and rl.get("url"):
+                    rl_url = str(rl["url"]).strip()
+                    if rl_url and rl_url not in seen_urls:
+                        rl_title = str(rl.get("title", "")).strip() or cand.title
+                        if rl.get("outlet") and not rl_title.startswith(f"[{rl['outlet']}]"):
+                            rl_title = f"{rl['outlet']} - {rl_title}"
+                        sanitized_links.append({"title": rl_title, "url": rl_url})
+                        seen_urls.add(rl_url)
+            if not sanitized_links:
+                sanitized_links = _make_candidate_links(cand)
+            item["links"] = sanitized_links
+
+        # 1. Process topHeadlines: retain candidate multi-outlet source links
         headlines = briefing.get("topHeadlines", [])
         for idx, h in enumerate(headlines, start=1):
             h["id"] = idx
             h.pop("body", None)
+            cid = h.get("categoryId")
+            if cid in grouped_candidates and grouped_candidates[cid]:
+                cands = grouped_candidates[cid]
+                matched_cand = None
+                h_links = {
+                    str(l.get("url")).strip()
+                    for l in h.get("links", [])
+                    if isinstance(l, dict) and l.get("url")
+                }
+                for cand in cands:
+                    c_urls = {cand.url.strip()} if cand.url else set()
+                    c_urls.update(
+                        str(r["url"]).strip()
+                        for r in getattr(cand, "related_links", []) or []
+                        if isinstance(r, dict) and r.get("url")
+                    )
+                    if h_links & c_urls:
+                        matched_cand = cand
+                        break
+                if not matched_cand:
+                    h_text = str(h.get("headline", "")).strip().lower()
+                    for cand in cands:
+                        if cand.title.strip().lower() in h_text or h_text in cand.title.strip().lower():
+                            matched_cand = cand
+                            break
+                if not matched_cand and idx - 1 < len(cands):
+                    matched_cand = cands[idx - 1]
+                if matched_cand:
+                    _enrich_links(h, matched_cand)
             if "deepDive" not in h or not isinstance(h.get("deepDive"), dict):
                 h["deepDive"] = make_default_deep_dive(
                     category_id=h.get("categoryId"),
@@ -459,8 +557,93 @@ class DailyBriefingPipeline:
                     summary=h.get("summary", ""),
                 )
 
-        items = briefing.get("articles", [])
-        for idx, item in enumerate(items, start=len(headlines) + 1):
+        # 2. Process articles: enforce exact 3 articles per active category (or min(3, len(candidates)))
+        raw_items_by_cid: dict[int, list[dict[str, Any]]] = {}
+        for item in briefing.get("articles", []):
+            if isinstance(item, dict):
+                cid = item.get("categoryId")
+                if cid in active_cids:
+                    raw_items_by_cid.setdefault(cid, []).append(item)
+
+        final_articles: list[dict[str, Any]] = []
+        for cid in active_cids:
+            cands = grouped_candidates[cid]
+            target_quota = min(3, len(cands))
+            existing_items = raw_items_by_cid.get(cid, [])
+
+            # Match and enrich existing items with candidate links
+            used_cand_ids: set[str] = set()
+            for i, it in enumerate(existing_items):
+                it_links = {
+                    str(l.get("url")).strip()
+                    for l in it.get("links", [])
+                    if isinstance(l, dict) and l.get("url")
+                }
+                matched_cand = None
+                for cand in cands:
+                    if cand.id in used_cand_ids:
+                        continue
+                    c_urls = {cand.url.strip()} if cand.url else set()
+                    c_urls.update(
+                        str(r["url"]).strip()
+                        for r in getattr(cand, "related_links", []) or []
+                        if isinstance(r, dict) and r.get("url")
+                    )
+                    if it_links & c_urls:
+                        matched_cand = cand
+                        break
+                if not matched_cand:
+                    it_head = str(it.get("headline", "")).strip().lower()
+                    for cand in cands:
+                        if cand.id in used_cand_ids:
+                            continue
+                        if cand.title.strip().lower() in it_head or it_head in cand.title.strip().lower():
+                            matched_cand = cand
+                            break
+                if not matched_cand:
+                    for cand in cands:
+                        if cand.id not in used_cand_ids:
+                            matched_cand = cand
+                            break
+                if matched_cand:
+                    used_cand_ids.add(matched_cand.id)
+                    _enrich_links(it, matched_cand)
+
+            if len(existing_items) > target_quota:
+                existing_items = existing_items[:target_quota]
+            elif len(existing_items) < target_quota:
+                # Supplement from remaining candidate articles to reach exact quota
+                for cand in cands:
+                    if len(existing_items) >= target_quota:
+                        break
+                    if cand.id in used_cand_ids:
+                        continue
+                    used_cand_ids.add(cand.id)
+                    supp_item = {
+                        "categoryId": cid,
+                        "headline": cand.title,
+                        "summary": cand.summary or f"{cand.outlet or '주요 언론'} 보도: {cand.title}",
+                        "impact": "업계 동향 및 관련 시장 지표에 미치는 영향을 주시하고 있어요.",
+                        "deepDive": make_default_deep_dive(cid, cand.title, cand.summary),
+                        "links": _make_candidate_links(cand),
+                    }
+                    existing_items.append(supp_item)
+                while len(existing_items) < target_quota:
+                    cand = cands[len(existing_items) % len(cands)]
+                    supp_item = {
+                        "categoryId": cid,
+                        "headline": cand.title,
+                        "summary": cand.summary or f"{cand.outlet or '주요 언론'} 보도: {cand.title}",
+                        "impact": "업계 동향 및 관련 시장 지표에 미치는 영향을 주시하고 있어요.",
+                        "deepDive": make_default_deep_dive(cid, cand.title, cand.summary),
+                        "links": _make_candidate_links(cand),
+                    }
+                    existing_items.append(supp_item)
+
+            final_articles.extend(existing_items)
+
+        # Assign sequential integer IDs: 4..N for articles
+        for idx, item in enumerate(final_articles, start=len(headlines) + 1):
             item["id"] = idx
             item.pop("body", None)
             if "deepDive" not in item or not isinstance(item.get("deepDive"), dict):
@@ -470,6 +653,8 @@ class DailyBriefingPipeline:
                     summary=item.get("summary", ""),
                 )
 
+        briefing["topHeadlines"] = headlines
+        briefing["articles"] = final_articles
         if "briefingDate" not in briefing or not briefing["briefingDate"]:
             briefing["briefingDate"] = self.briefing_date
 

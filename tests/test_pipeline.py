@@ -1053,4 +1053,392 @@ def test_pipeline_summarize_batched_and_fallback(
         assert "body" not in a
 
 
+def test_pipeline_candidate_quota_exact_three_articles_per_category(
+    tmp_path: Path,
+    mock_feeds_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify exactly 3 articles per category are produced in standard and fallback flows when >=3 candidates exist."""
+    pipeline = DailyBriefingPipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=tmp_path / "data_quota",
+        dry_run=True,
+        date="2026-10-25",
+    )
+
+    # Category 1 (정치): 5 candidates (>=3, should produce exactly 3)
+    cat1_articles = [
+        Article(
+            id=f"pol-{i}",
+            title=f"정치 주요 정책 발표 {i}",
+            summary=f"정치 정책 요약 {i}",
+            url=f"https://example.com/pol/{i}",
+            outlet=f"언론사{i}",
+            published_at=f"2026-10-25T08:0{i}:00Z",
+            category="정치",
+            category_id=1,
+        )
+        for i in range(1, 6)
+    ]
+
+    # Category 2 (경제·금융): 4 candidates (>=3, should produce exactly 3)
+    cat2_articles = [
+        Article(
+            id=f"econ-{i}",
+            title=f"경제 금리 및 금융 시장 {i}",
+            summary=f"경제 금융 요약 {i}",
+            url=f"https://example.com/econ/{i}",
+            outlet=f"경제일보{i}",
+            published_at=f"2026-10-25T08:1{i}:00Z",
+            category="경제·금융",
+            category_id=2,
+        )
+        for i in range(1, 5)
+    ]
+
+    # Category 3 (산업·기업): 2 candidates (<3, should produce exactly min(3, 2) = 2)
+    cat3_articles = [
+        Article(
+            id=f"ind-{i}",
+            title=f"산업 반도체 동향 {i}",
+            summary=f"산업 반도체 요약 {i}",
+            url=f"https://example.com/ind/{i}",
+            outlet=f"산업신문{i}",
+            published_at=f"2026-10-25T08:2{i}:00Z",
+            category="산업·기업",
+            category_id=3,
+        )
+        for i in range(1, 3)
+    ]
+
+    all_candidates = cat1_articles + cat2_articles + cat3_articles
+
+    # 1. Standard flow (GeminiClient in mock mode)
+    res_standard = pipeline.summarize(all_candidates)
+
+    assert len(res_standard["topHeadlines"]) == 3
+    for idx, h in enumerate(res_standard["topHeadlines"], start=1):
+        assert h["id"] == idx
+
+    std_articles = res_standard["articles"]
+    c1_std = [a for a in std_articles if a["categoryId"] == 1]
+    c2_std = [a for a in std_articles if a["categoryId"] == 2]
+    c3_std = [a for a in std_articles if a["categoryId"] == 3]
+
+    assert len(c1_std) == 3, "Category 1 with 5 candidates must produce exactly 3 articles"
+    assert len(c2_std) == 3, "Category 2 with 4 candidates must produce exactly 3 articles"
+    assert len(c3_std) == 2, "Category 3 with 2 candidates must produce min(3, 2) = 2 articles"
+    assert len(std_articles) == 8
+
+    # Sequential continuous IDs starting from 4
+    for idx, a in enumerate(std_articles, start=4):
+        assert a["id"] == idx
+        assert "deepDive" in a
+        assert "links" in a
+        assert len(a["links"]) >= 1
+
+    # 2. Fallback flow (simulate LLM failure)
+    def mock_fail_summarize(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("Simulated Gemini API error")
+
+    monkeypatch.setattr(pipeline.summarizer, "summarize_articles", mock_fail_summarize)
+    res_fallback = pipeline.summarize(all_candidates)
+
+    assert pipeline.gemini_fallback_used is True
+    assert len(res_fallback["topHeadlines"]) == 3
+    for idx, h in enumerate(res_fallback["topHeadlines"], start=1):
+        assert h["id"] == idx
+
+    fb_articles = res_fallback["articles"]
+    c1_fb = [a for a in fb_articles if a["categoryId"] == 1]
+    c2_fb = [a for a in fb_articles if a["categoryId"] == 2]
+    c3_fb = [a for a in fb_articles if a["categoryId"] == 3]
+
+    assert len(c1_fb) == 3, "Fallback flow: Category 1 with 5 candidates must produce exactly 3 articles"
+    assert len(c2_fb) == 3, "Fallback flow: Category 2 with 4 candidates must produce exactly 3 articles"
+    assert len(c3_fb) == 2, "Fallback flow: Category 3 with 2 candidates must produce min(3, 2) = 2 articles"
+    assert len(fb_articles) == 8
+
+    for idx, a in enumerate(fb_articles, start=4):
+        assert a["id"] == idx
+        assert "deepDive" in a
+        assert "links" in a
+        assert len(a["links"]) >= 1
+
+
+def test_pipeline_multi_outlet_links_preservation(
+    tmp_path: Path,
+    mock_feeds_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify briefing articles from mock candidate data with multiple candidate outlets preserve all links."""
+    pipeline = DailyBriefingPipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=tmp_path / "data_multi_links",
+        dry_run=True,
+        date="2026-10-25",
+    )
+
+    # Candidate with cross-validated coverage across multiple outlets
+    lead_article = Article(
+        id="pol-lead",
+        title="국회 본회의 주요 민생 법안 여야 전격 타결",
+        summary="여야 원내대표가 본회의에서 핵심 민생 법안을 일괄 처리하기로 합의했습니다.",
+        url="https://example.com/pol/lead",
+        outlet="연합뉴스",
+        published_at="2026-10-25T09:00:00Z",
+        category="정치",
+        category_id=1,
+        related_links=[
+            {"title": "여야 민생법안 타결 분석", "url": "https://example.com/pol/sbs-01", "outlet": "SBS"},
+            {"title": "국회 본회의 합의안 전문", "url": "https://example.com/pol/mbc-02", "outlet": "MBC"},
+            {"title": "여야 합의 후속 일정", "url": "https://example.com/pol/kbs-03", "outlet": "KBS"},
+        ],
+    )
+    other_art_1 = Article(
+        id="pol-2",
+        title="정치 정책 발표 2",
+        summary="정치 요약 2",
+        url="https://example.com/pol/sub2",
+        outlet="한겨레",
+        published_at="2026-10-25T09:10:00Z",
+        category="정치",
+        category_id=1,
+    )
+    other_art_2 = Article(
+        id="pol-3",
+        title="정치 정책 발표 3",
+        summary="정치 요약 3",
+        url="https://example.com/pol/sub3",
+        outlet="동아일보",
+        published_at="2026-10-25T09:20:00Z",
+        category="정치",
+        category_id=1,
+    )
+
+    candidates = [lead_article, other_art_1, other_art_2]
+
+    # 1. Standard flow
+    res = pipeline.summarize(candidates)
+    articles = res["articles"]
+    assert len(articles) == 3
+
+    # Find article corresponding to lead_article
+    lead_output = None
+    for a in articles:
+        urls = [l["url"] for l in a.get("links", []) if isinstance(l, dict)]
+        if "https://example.com/pol/lead" in urls:
+            lead_output = a
+            break
+
+    assert lead_output is not None, "Lead article with multi-outlet links must be present in output articles"
+    lead_urls = [l["url"] for l in lead_output["links"]]
+
+    # Verify primary URL and all sibling outlet links are preserved
+    assert "https://example.com/pol/lead" in lead_urls
+    assert "https://example.com/pol/sbs-01" in lead_urls
+    assert "https://example.com/pol/mbc-02" in lead_urls
+    assert "https://example.com/pol/kbs-03" in lead_urls
+    assert len(lead_urls) == 4
+    assert len(lead_urls) == len(set(lead_urls)), "All preserved links must be deduplicated"
+
+    # 2. Fallback flow
+    def mock_fail(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("Simulated failure")
+
+    monkeypatch.setattr(pipeline.summarizer, "summarize_articles", mock_fail)
+    fb_res = pipeline.summarize(candidates)
+
+    fb_lead_output = None
+    for a in fb_res["articles"]:
+        urls = [l["url"] for l in a.get("links", []) if isinstance(l, dict)]
+        if "https://example.com/pol/lead" in urls:
+            fb_lead_output = a
+            break
+
+    assert fb_lead_output is not None
+    fb_lead_urls = [l["url"] for l in fb_lead_output["links"]]
+    assert "https://example.com/pol/lead" in fb_lead_urls
+    assert "https://example.com/pol/sbs-01" in fb_lead_urls
+    assert "https://example.com/pol/mbc-02" in fb_lead_urls
+    assert "https://example.com/pol/kbs-03" in fb_lead_urls
+
+
+def test_run_pipeline_end_to_end_quota_and_multi_link(
+    tmp_path: Path,
+    mock_feeds_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify end-to-end pipeline run produces exact 3 articles per category and preserves multi-outlet links."""
+    # Politics: Story 1 covered by 3 independent outlets (Yonhap, SBS, MBN) + 3 single-outlet stories
+    politics_articles = [
+        Article(
+            id="pol-1-yonhap",
+            title="여야 원내대표 민생 법안 본회의 일괄 처리 합의",
+            summary="여야 원내대표가 민생 법안 처리에 합의했다.",
+            url="https://example.com/pol/yonhap/1",
+            outlet="연합뉴스",
+            published_at="2026-10-25T10:00:00+00:00",
+            category="정치",
+            category_id=1,
+        ),
+        Article(
+            id="pol-1-sbs",
+            title="여야 원내대표 민생 법안 처리 전격 합의",
+            summary="여야 합의 상세 내용이다.",
+            url="https://example.com/pol/sbs/1",
+            outlet="SBS",
+            published_at="2026-10-25T10:05:00+00:00",
+            category="정치",
+            category_id=1,
+        ),
+        Article(
+            id="pol-1-mbn",
+            title="여야 원내대표 민생 법안 일괄 처리 전격 타결",
+            summary="타결 소식이다.",
+            url="https://example.com/pol/mbn/1",
+            outlet="MBN",
+            published_at="2026-10-25T10:10:00+00:00",
+            category="정치",
+            category_id=1,
+        ),
+        Article(
+            id="pol-2",
+            title="대통령실 참모진 전면 개편 단행 국정 쇄신 가속화",
+            summary="인사 개편 소식이다.",
+            url="https://example.com/pol/pres/2",
+            outlet="연합뉴스",
+            published_at="2026-10-25T11:00:00+00:00",
+            category="정치",
+            category_id=1,
+        ),
+        Article(
+            id="pol-3",
+            title="국회 상임위 선거제 개편 공청회 개최 찬반 토론 가열",
+            summary="공청회 소식이다.",
+            url="https://example.com/pol/hearing/3",
+            outlet="한겨레",
+            published_at="2026-10-25T12:00:00+00:00",
+            category="정치",
+            category_id=1,
+        ),
+        Article(
+            id="pol-4",
+            title="여당 지도부 전당대회 당권 레이스 본격화",
+            summary="전당대회 소식이다.",
+            url="https://example.com/pol/party/4",
+            outlet="동아일보",
+            published_at="2026-10-25T13:00:00+00:00",
+            category="정치",
+            category_id=1,
+        ),
+    ]
+
+    # Economy: Story 1 covered by 2 outlets (Maeil, Hankyung) + 3 single-outlet stories
+    economy_articles = [
+        Article(
+            id="econ-1-mk",
+            title="한국은행 금통위 기준금리 연 3.50% 만장일치 동결",
+            summary="금리 동결 결정 소식이다.",
+            url="https://example.com/econ/mk/1",
+            outlet="매일경제",
+            published_at="2026-10-25T10:00:00+00:00",
+            category="경제·금융",
+            category_id=2,
+        ),
+        Article(
+            id="econ-1-hk",
+            title="한국은행 금통위 기준금리 연 3.50% 동결 결정",
+            summary="한은 동결 배경이다.",
+            url="https://example.com/econ/hk/1",
+            outlet="한국경제",
+            published_at="2026-10-25T10:05:00+00:00",
+            category="경제·금융",
+            category_id=2,
+        ),
+        Article(
+            id="econ-2",
+            title="코스피 외국인 순매수 힘입어 연중 최고치 경신 마감",
+            summary="증시 마감 소식이다.",
+            url="https://example.com/econ/stock/2",
+            outlet="매일경제",
+            published_at="2026-10-25T11:00:00+00:00",
+            category="경제·금융",
+            category_id=2,
+        ),
+        Article(
+            id="econ-3",
+            title="정부 유류세 인하 조치 연말까지 추가 연장 결정",
+            summary="유류세 조치 소식이다.",
+            url="https://example.com/econ/tax/3",
+            outlet="한국경제",
+            published_at="2026-10-25T12:00:00+00:00",
+            category="경제·금융",
+            category_id=2,
+        ),
+        Article(
+            id="econ-4",
+            title="주택 담보대출 금리 변동 추이 모니터링 강화",
+            summary="대출 금리 점검이다.",
+            url="https://example.com/econ/loan/4",
+            outlet="매일경제",
+            published_at="2026-10-25T13:00:00+00:00",
+            category="경제·금융",
+            category_id=2,
+        ),
+    ]
+
+    all_test_articles = politics_articles + economy_articles
+
+    monkeypatch.setattr(
+        "src.ingest.rss.RSSFeedParser.parse_feed",
+        lambda url, category="", outlet="", timeout=10.0: [
+            art for art in all_test_articles if art.category == category or not category
+        ],
+    )
+
+    output_dir = tmp_path / "data_e2e_quota"
+
+    briefing = run_pipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=output_dir,
+        dry_run=True,
+        date="2026-10-25",
+    )
+
+    latest_file = output_dir / "latest.json"
+    assert latest_file.is_file()
+    with open(latest_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # 1. Exactly 3 topHeadlines with sequential IDs 1, 2, 3
+    assert len(data["topHeadlines"]) == 3
+    for idx, h in enumerate(data["topHeadlines"], start=1):
+        assert h["id"] == idx
+
+    # 2. Exactly 3 articles per active category
+    articles = data["articles"]
+    pol_arts = [a for a in articles if a["categoryId"] == 1]
+    econ_arts = [a for a in articles if a["categoryId"] == 2]
+
+    assert len(pol_arts) == 3, "Politics must produce exactly 3 articles in output JSON"
+    assert len(econ_arts) == 3, "Economy must produce exactly 3 articles in output JSON"
+    assert len(articles) == 6
+
+    # 3. Continuous sequential IDs starting from 4
+    for idx, a in enumerate(articles, start=4):
+        assert a["id"] == idx
+
+    # 4. Multi-outlet source links preserved in JSON output
+    all_pol_urls = [l["url"] for a in pol_arts for l in a.get("links", [])]
+    assert "https://example.com/pol/yonhap/1" in all_pol_urls
+    assert "https://example.com/pol/sbs/1" in all_pol_urls
+    assert "https://example.com/pol/mbn/1" in all_pol_urls
+
+    all_econ_urls = [l["url"] for a in econ_arts for l in a.get("links", [])]
+    assert "https://example.com/econ/mk/1" in all_econ_urls
+    assert "https://example.com/econ/hk/1" in all_econ_urls
+
+
+
 
