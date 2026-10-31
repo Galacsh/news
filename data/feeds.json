@@ -22,6 +22,27 @@
       "is_active": true
     },
     {
+      "name": "한겨레 - 정치",
+      "url": "https://www.hani.co.kr/rss/politics/",
+      "categoryId": 1,
+      "category": "정치",
+      "is_active": true
+    },
+    {
+      "name": "SBS - 정치",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=01",
+      "categoryId": 1,
+      "category": "정치",
+      "is_active": true
+    },
+    {
+      "name": "MBN - 정치",
+      "url": "https://www.mbn.co.kr/rss/politics/",
+      "categoryId": 1,
+      "category": "정치",
+      "is_active": true
+    },
+    {
       "name": "연합뉴스 - 경제",
       "url": "https://www.yna.co.kr/rss/economy.xml",
       "categoryId": 2,
@@ -45,6 +66,27 @@
     {
       "name": "동아일보 - 경제",
       "url": "https://rss.donga.com/economy.xml",
+      "categoryId": 2,
+      "category": "경제·금융",
+      "is_active": true
+    },
+    {
+      "name": "한겨레 - 경제",
+      "url": "https://www.hani.co.kr/rss/economy/",
+      "categoryId": 2,
+      "category": "경제·금융",
+      "is_active": true
+    },
+    {
+      "name": "SBS - 경제",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=02",
+      "categoryId": 2,
+      "category": "경제·금융",
+      "is_active": true
+    },
+    {
+      "name": "MBN - 경제",
+      "url": "https://www.mbn.co.kr/rss/economy/",
       "categoryId": 2,
       "category": "경제·금융",
       "is_active": true
@@ -92,6 +134,27 @@
       "is_active": true
     },
     {
+      "name": "한겨레 - 사회",
+      "url": "https://www.hani.co.kr/rss/society/",
+      "categoryId": 4,
+      "category": "사회",
+      "is_active": true
+    },
+    {
+      "name": "SBS - 사회",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=03",
+      "categoryId": 4,
+      "category": "사회",
+      "is_active": true
+    },
+    {
+      "name": "노컷뉴스 - 사회",
+      "url": "https://rss.nocutnews.co.kr/nocutnews.xml",
+      "categoryId": 4,
+      "category": "사회",
+      "is_active": true
+    },
+    {
       "name": "연합뉴스 - 국제",
       "url": "https://www.yna.co.kr/rss/international.xml",
       "categoryId": 5,
@@ -100,7 +163,7 @@
     },
     {
       "name": "동아일보 - 국제",
-      "url": "https://rss.donga.com/global.xml",
+      "url": "https://rss.donga.com/international.xml",
       "categoryId": 5,
       "category": "국제·글로벌",
       "is_active": true
@@ -108,6 +171,20 @@
     {
       "name": "매일경제 - 국제",
       "url": "https://www.mk.co.kr/rss/30300018/",
+      "categoryId": 5,
+      "category": "국제·글로벌",
+      "is_active": true
+    },
+    {
+      "name": "한겨레 - 국제",
+      "url": "https://www.hani.co.kr/rss/international/",
+      "categoryId": 5,
+      "category": "국제·글로벌",
+      "is_active": true
+    },
+    {
+      "name": "SBS - 국제",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=08",
       "categoryId": 5,
       "category": "국제·글로벌",
       "is_active": true
@@ -192,6 +269,13 @@
     {
       "name": "SBS - 연예/문화",
       "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=07",
+      "categoryId": 8,
+      "category": "문화·콘텐츠",
+      "is_active": true
+    },
+    {
+      "name": "한겨레 - 문화",
+      "url": "https://www.hani.co.kr/rss/culture/",
       "categoryId": 8,
       "category": "문화·콘텐츠",
       "is_active": true

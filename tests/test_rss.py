@@ -512,11 +512,12 @@ def test_feed_catalog_compliance_and_coverage():
         feeds_catalog = json.load(f)
 
     active_feeds = [f for f in feeds_catalog.get("feeds", []) if f.get("is_active", True)]
+    assert len(active_feeds) == 48, f"Expected 48 active feeds in catalog, found {len(active_feeds)}"
     feeds_per_cat = Counter(f["categoryId"] for f in active_feeds)
 
     for cat_id, cat_name in cat_map.items():
         count = feeds_per_cat[cat_id]
-        assert 2 <= count <= 4, f"Category {cat_id} ({cat_name}) must have 2~4 feeds, found {count}"
+        assert 3 <= count <= 7, f"Category {cat_id} ({cat_name}) must have 3~7 feeds, found {count}"
 
     for f in active_feeds:
         outlet = f["name"].split(" - ")[0].strip()
@@ -524,15 +525,27 @@ def test_feed_catalog_compliance_and_coverage():
         assert f["categoryId"] in cat_map, f"Invalid categoryId {f.get('categoryId')}"
         assert f["category"] == cat_map[f["categoryId"]], f"Category name mismatch in feed {f['name']}"
 
+    # Verify newly added outlets and repaired DongA feed URL
+    active_outlets = {f["name"].split(" - ")[0].strip() for f in active_feeds}
+    assert {"한겨레", "SBS", "MBN", "노컷뉴스"}.issubset(active_outlets)
+    donga_intl = next(f for f in active_feeds if f["name"] == "동아일보 - 국제")
+    assert donga_intl["url"] == "https://rss.donga.com/international.xml"
+
     # 2. Validate DEFAULT_FALLBACK_FEEDS in src.ingest.sources
+    assert len(DEFAULT_FALLBACK_FEEDS) == 48, f"Expected 48 fallback feeds, found {len(DEFAULT_FALLBACK_FEEDS)}"
     fallback_per_cat = Counter(f.category_id for f in DEFAULT_FALLBACK_FEEDS if f.is_active)
     for cat_id, cat_name in cat_map.items():
         count = fallback_per_cat[cat_id]
-        assert 2 <= count <= 4, f"Fallback Category {cat_id} ({cat_name}) must have 2~4 feeds, found {count}"
+        assert 3 <= count <= 7, f"Fallback Category {cat_id} ({cat_name}) must have 3~7 feeds, found {count}"
 
     for f in DEFAULT_FALLBACK_FEEDS:
         outlet = f.name.split(" - ")[0].strip()
         assert outlet not in bot_false_outlets, f"Fallback feed {f.name} belongs to bot:false outlet {outlet}"
         assert f.category_id in cat_map, f"Invalid category_id {f.category_id}"
         assert f.category == cat_map[f.category_id], f"Category name mismatch in fallback feed {f.name}"
+
+    fallback_outlets = {f.name.split(" - ")[0].strip() for f in DEFAULT_FALLBACK_FEEDS}
+    assert {"한겨레", "SBS", "MBN", "노컷뉴스"}.issubset(fallback_outlets)
+    donga_fb = next(f for f in DEFAULT_FALLBACK_FEEDS if f.name == "동아일보 - 국제")
+    assert donga_fb.url == "https://rss.donga.com/international.xml"
 

@@ -94,6 +94,27 @@ DEFAULT_FALLBACK_FEEDS: list[FeedSource] = [
         category_id=1,
         is_active=True,
     ),
+    FeedSource(
+        name="한겨레 - 정치",
+        url="https://www.hani.co.kr/rss/politics/",
+        category="정치",
+        category_id=1,
+        is_active=True,
+    ),
+    FeedSource(
+        name="SBS - 정치",
+        url="https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=01",
+        category="정치",
+        category_id=1,
+        is_active=True,
+    ),
+    FeedSource(
+        name="MBN - 정치",
+        url="https://www.mbn.co.kr/rss/politics/",
+        category="정치",
+        category_id=1,
+        is_active=True,
+    ),
     # Cat 2: 경제·금융
     FeedSource(
         name="연합뉴스 - 경제",
@@ -119,6 +140,27 @@ DEFAULT_FALLBACK_FEEDS: list[FeedSource] = [
     FeedSource(
         name="동아일보 - 경제",
         url="https://rss.donga.com/economy.xml",
+        category="경제·금융",
+        category_id=2,
+        is_active=True,
+    ),
+    FeedSource(
+        name="한겨레 - 경제",
+        url="https://www.hani.co.kr/rss/economy/",
+        category="경제·금융",
+        category_id=2,
+        is_active=True,
+    ),
+    FeedSource(
+        name="SBS - 경제",
+        url="https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=02",
+        category="경제·금융",
+        category_id=2,
+        is_active=True,
+    ),
+    FeedSource(
+        name="MBN - 경제",
+        url="https://www.mbn.co.kr/rss/economy/",
         category="경제·금융",
         category_id=2,
         is_active=True,
@@ -167,6 +209,27 @@ DEFAULT_FALLBACK_FEEDS: list[FeedSource] = [
         category_id=4,
         is_active=True,
     ),
+    FeedSource(
+        name="한겨레 - 사회",
+        url="https://www.hani.co.kr/rss/society/",
+        category="사회",
+        category_id=4,
+        is_active=True,
+    ),
+    FeedSource(
+        name="SBS - 사회",
+        url="https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=03",
+        category="사회",
+        category_id=4,
+        is_active=True,
+    ),
+    FeedSource(
+        name="노컷뉴스 - 사회",
+        url="https://rss.nocutnews.co.kr/nocutnews.xml",
+        category="사회",
+        category_id=4,
+        is_active=True,
+    ),
     # Cat 5: 국제·글로벌
     FeedSource(
         name="연합뉴스 - 국제",
@@ -177,7 +240,7 @@ DEFAULT_FALLBACK_FEEDS: list[FeedSource] = [
     ),
     FeedSource(
         name="동아일보 - 국제",
-        url="https://rss.donga.com/global.xml",
+        url="https://rss.donga.com/international.xml",
         category="국제·글로벌",
         category_id=5,
         is_active=True,
@@ -185,6 +248,20 @@ DEFAULT_FALLBACK_FEEDS: list[FeedSource] = [
     FeedSource(
         name="매일경제 - 국제",
         url="https://www.mk.co.kr/rss/30300018/",
+        category="국제·글로벌",
+        category_id=5,
+        is_active=True,
+    ),
+    FeedSource(
+        name="한겨레 - 국제",
+        url="https://www.hani.co.kr/rss/international/",
+        category="국제·글로벌",
+        category_id=5,
+        is_active=True,
+    ),
+    FeedSource(
+        name="SBS - 국제",
+        url="https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=08",
         category="국제·글로벌",
         category_id=5,
         is_active=True,
@@ -272,6 +349,13 @@ DEFAULT_FALLBACK_FEEDS: list[FeedSource] = [
     FeedSource(
         name="SBS - 연예/문화",
         url="https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=07",
+        category="문화·콘텐츠",
+        category_id=8,
+        is_active=True,
+    ),
+    FeedSource(
+        name="한겨레 - 문화",
+        url="https://www.hani.co.kr/rss/culture/",
         category="문화·콘텐츠",
         category_id=8,
         is_active=True,
