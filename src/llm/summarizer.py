@@ -12,12 +12,33 @@ from src.ingest.models import Article
 from src.llm.client import GeminiAPIError, GeminiClient
 from src.llm.prompts import (
     BRIEFING_RESPONSE_SCHEMA,
+    CATEGORY_LENSES,
     SYSTEM_PROMPT,
     build_briefing_prompt,
     load_default_categories,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def make_default_deep_dive(
+    category_id: int,
+    headline: str = "",
+    summary: str = "",
+) -> dict[str, Any]:
+    """Generate a category-tailored analytical deepDive adhering to CATEGORY_LENSES."""
+    lens = CATEGORY_LENSES.get(category_id, CATEGORY_LENSES[1])
+    sections = []
+    subject = headline.strip() if headline.strip() else "해당 사안"
+    for label in lens["sections"]:
+        sections.append({
+            "label": label,
+            "content": f"{subject} 관련 {label} 관점에서 핵심 사실과 향후 파급 효과를 면밀히 분석하고 있어요.",
+        })
+    return {
+        "lensTitle": lens["lensTitle"],
+        "sections": sections,
+    }
 
 
 class NewsSummarizer:
@@ -78,12 +99,14 @@ class NewsSummarizer:
         self,
         articles: list[Article] | dict[int, list[Article]],
         briefing_date: str | datetime | None = None,
+        batch_size: int = 3,
     ) -> dict[str, Any]:
-        """Synthesize candidate articles into a structured daily news briefing.
+        """Synthesize candidate articles into a structured daily news briefing with category batching.
 
         Args:
             articles: Either a flat list of Article objects or a dict grouped by categoryId.
             briefing_date: Optional briefing date (ISO 8601 string or datetime object).
+            batch_size: Number of categories processed per Gemini call (default: 3).
 
         Returns:
             Structured dictionary matching dashboard schema:
@@ -119,25 +142,82 @@ class NewsSummarizer:
                 "articles": [],
             }
 
-        # Build prompt
-        prompt = build_briefing_prompt(grouped, categories=self.categories)
+        active_cids = [cid for cid in sorted(grouped.keys()) if grouped[cid]]
+        if not active_cids:
+            return {
+                "briefingDate": briefing_date_str,
+                "topHeadlines": [],
+                "articles": [],
+            }
 
-        try:
-            raw_data = self.client.generate_json(
-                contents=prompt,
-                system_instruction=SYSTEM_PROMPT,
-                response_schema=BRIEFING_RESPONSE_SCHEMA,
-            )
-            return self._normalize_briefing_payload(raw_data, grouped, briefing_date_str)
+        # Partition active categories into chunks of batch_size
+        chunk_size = max(1, batch_size)
+        chunks = [
+            active_cids[i : i + chunk_size]
+            for i in range(0, len(active_cids), chunk_size)
+        ]
 
-        except Exception as exc:
-            if self.fallback_on_error:
+        batch_headlines_list: list[list[dict[str, Any]]] = []
+        all_candidate_articles: list[dict[str, Any]] = []
+
+        for chunk_cids in chunks:
+            chunk_grouped = {cid: grouped[cid] for cid in chunk_cids}
+            prompt = build_briefing_prompt(chunk_grouped, categories=self.categories)
+
+            try:
+                raw_data = self.client.generate_json(
+                    contents=prompt,
+                    system_instruction=SYSTEM_PROMPT,
+                    response_schema=BRIEFING_RESPONSE_SCHEMA,
+                )
+
+                chunk_headlines: list[dict[str, Any]] = []
+                raw_headlines = raw_data.get("topHeadlines")
+                if isinstance(raw_headlines, list):
+                    for hl in raw_headlines:
+                        if isinstance(hl, dict):
+                            cid = self._coerce_category_id(hl.get("categoryId"))
+                            if len(chunks) == 1 or cid in chunk_cids:
+                                chunk_headlines.append(hl)
+                batch_headlines_list.append(chunk_headlines)
+
+                raw_articles = raw_data.get("articles")
+                if isinstance(raw_articles, list):
+                    for art_item in raw_articles:
+                        if isinstance(art_item, dict):
+                            cid = self._coerce_category_id(art_item.get("categoryId"))
+                            if len(chunks) == 1 or cid in chunk_cids:
+                                all_candidate_articles.append(art_item)
+
+            except Exception as exc:
+                if not self.fallback_on_error:
+                    raise
                 logger.warning(
-                    "LLM summarization failed (%s). Generating extractive fallback briefing.",
+                    "LLM summarization failed for category chunk %s (%s). Generating extractive fallback for this chunk.",
+                    chunk_cids,
                     exc,
                 )
-                return self.extract_fallback_briefing(grouped, briefing_date=briefing_date_str)
-            raise
+                chunk_fallback = self.extract_fallback_briefing(
+                    chunk_grouped,
+                    briefing_date=briefing_date_str,
+                )
+                batch_headlines_list.append(chunk_fallback.get("topHeadlines", []))
+                all_candidate_articles.extend(chunk_fallback.get("articles", []))
+
+        # Interleave / synthesize topHeadlines candidates across all batches
+        max_batch_hl = max((len(b) for b in batch_headlines_list), default=0)
+        interleaved_headlines: list[dict[str, Any]] = []
+        for idx in range(max_batch_hl):
+            for b in batch_headlines_list:
+                if idx < len(b):
+                    interleaved_headlines.append(b[idx])
+
+        combined_raw = {
+            "topHeadlines": interleaved_headlines,
+            "articles": all_candidate_articles,
+        }
+
+        return self._normalize_briefing_payload(combined_raw, grouped, briefing_date_str)
 
     def extract_fallback_briefing(
         self,
@@ -169,6 +249,7 @@ class NewsSummarizer:
                     "headline": art.title,
                     "summary": art.summary or f"{art.outlet or '주요 언론'} 보도: {art.title}",
                     "impact": "해당 이슈가 사회 및 관련 산업 전반에 미치는 파급 효과에 주목이 쏠리고 있어요.",
+                    "deepDive": make_default_deep_dive(cat_id, art.title, art.summary),
                     "links": [
                         {
                             "title": f"{art.outlet} - {art.title}" if art.outlet else art.title,
@@ -191,6 +272,7 @@ class NewsSummarizer:
                             "headline": art.title,
                             "summary": art.summary or f"{art.outlet or '주요 언론'} 보도: {art.title}",
                             "impact": "관련 정책 및 시장 환경 변화에 지속적인 영향이 예상돼요.",
+                            "deepDive": make_default_deep_dive(cat_id, art.title, art.summary),
                             "links": [
                                 {
                                     "title": f"{art.outlet} - {art.title}" if art.outlet else art.title,
@@ -212,6 +294,7 @@ class NewsSummarizer:
                     "headline": art.title,
                     "summary": art.summary or f"{art.outlet or '언론사'} 보도: {art.title}",
                     "impact": "업계 동향 및 관련 시장 지표에 미치는 영향을 주시하고 있어요.",
+                    "deepDive": make_default_deep_dive(cat_id, art.title, art.summary),
                     "links": [
                         {
                             "title": f"{art.outlet} - {art.title}" if art.outlet else art.title,
@@ -229,13 +312,43 @@ class NewsSummarizer:
             "articles": articles_list,
         }
 
+    def _normalize_deep_dive(
+        self,
+        deep_dive: Any,
+        cat_id: int,
+        headline: str = "",
+        summary: str = "",
+    ) -> dict[str, Any]:
+        """Validate and normalize deepDive structure, ensuring compliance with category lenses."""
+        lens = CATEGORY_LENSES.get(cat_id, CATEGORY_LENSES[1])
+        default_lens_title = lens["lensTitle"]
+
+        if isinstance(deep_dive, dict):
+            lens_title = str(deep_dive.get("lensTitle", "")).strip() or default_lens_title
+            raw_sections = deep_dive.get("sections")
+            if isinstance(raw_sections, list) and raw_sections:
+                normalized_sections: list[dict[str, str]] = []
+                for sec in raw_sections:
+                    if isinstance(sec, dict) and sec.get("label") and sec.get("content"):
+                        normalized_sections.append({
+                            "label": str(sec["label"]).strip(),
+                            "content": str(sec["content"]).strip(),
+                        })
+                if normalized_sections:
+                    return {
+                        "lensTitle": lens_title,
+                        "sections": normalized_sections,
+                    }
+
+        return make_default_deep_dive(cat_id, headline, summary)
+
     def _normalize_briefing_payload(
         self,
         raw_data: dict[str, Any],
         grouped_articles: dict[int, list[Article]],
         briefing_date: str,
     ) -> dict[str, Any]:
-        """Normalize, sanitize, and validate briefing payload structure and links."""
+        """Normalize, sanitize, and validate briefing payload structure, deepDive, and links."""
         # Build candidate link pool for missing link fallback
         cat_links: dict[int, list[dict[str, str]]] = {}
         all_links: list[dict[str, str]] = []
@@ -247,6 +360,14 @@ class NewsSummarizer:
                 }
                 cat_links.setdefault(cid, []).append(link)
                 all_links.append(link)
+                for rlink in getattr(art, "related_links", []) or []:
+                    if isinstance(rlink, dict) and rlink.get("url"):
+                        rl_entry = {
+                            "title": rlink.get("title", ""),
+                            "url": rlink["url"],
+                        }
+                        cat_links.setdefault(cid, []).append(rl_entry)
+                        all_links.append(rl_entry)
 
         # Normalize topHeadlines
         raw_headlines = raw_data.get("topHeadlines")
@@ -259,15 +380,29 @@ class NewsSummarizer:
                 continue
             cid = self._coerce_category_id(item.get("categoryId"))
             links = self._sanitize_links(item.get("links"), cid, cat_links, all_links)
+            hl = str(item.get("headline", "")).strip()
+            sm = str(item.get("summary", "")).strip()
+            dd = self._normalize_deep_dive(item.get("deepDive"), cid, headline=hl, summary=sm)
 
             normalized_headlines.append({
                 "id": str(item.get("id") or f"top-{i+1}"),
                 "categoryId": cid,
-                "headline": str(item.get("headline", "")).strip(),
-                "summary": str(item.get("summary", "")).strip(),
+                "headline": hl,
+                "summary": sm,
                 "impact": str(item.get("impact", "")).strip(),
+                "deepDive": dd,
                 "links": links,
             })
+
+        # De-duplicate headlines by title/headline
+        seen_headlines: set[str] = set()
+        deduped_headlines: list[dict[str, Any]] = []
+        for h in normalized_headlines:
+            key = h["headline"].strip()
+            if key and key not in seen_headlines:
+                seen_headlines.add(key)
+                deduped_headlines.append(h)
+        normalized_headlines = deduped_headlines
 
         # Cap topHeadlines at 3, supplement from extractive fallback if needed
         if len(normalized_headlines) > 3:
@@ -293,15 +428,29 @@ class NewsSummarizer:
                 continue
             cid = self._coerce_category_id(item.get("categoryId"))
             links = self._sanitize_links(item.get("links"), cid, cat_links, all_links)
+            hl = str(item.get("headline", "")).strip()
+            sm = str(item.get("summary", "")).strip()
+            dd = self._normalize_deep_dive(item.get("deepDive"), cid, headline=hl, summary=sm)
 
             normalized_articles.append({
                 "id": str(item.get("id") or f"art-{i+1}"),
                 "categoryId": cid,
-                "headline": str(item.get("headline", "")).strip(),
-                "summary": str(item.get("summary", "")).strip(),
+                "headline": hl,
+                "summary": sm,
                 "impact": str(item.get("impact", "")).strip(),
+                "deepDive": dd,
                 "links": links,
             })
+
+        # De-duplicate articles by headline
+        seen_articles: set[str] = set()
+        deduped_articles: list[dict[str, Any]] = []
+        for a in normalized_articles:
+            key = a["headline"].strip()
+            if key and key not in seen_articles:
+                seen_articles.add(key)
+                deduped_articles.append(a)
+        normalized_articles = deduped_articles
 
         # Assign continuous sequential integer IDs: 1..3 for top headlines, 4..N for articles
         for idx, item in enumerate(normalized_headlines, start=1):
