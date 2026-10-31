@@ -233,6 +233,21 @@ class NewsSummarizer:
         if briefing_date is None:
             briefing_date = datetime.now(timezone.utc).isoformat()
 
+        def _make_article_links(art: Article) -> list[dict[str, str]]:
+            main_title = f"{art.outlet} - {art.title}" if art.outlet else art.title
+            links: list[dict[str, str]] = [{"title": main_title, "url": art.url}]
+            seen_urls = {art.url}
+            for rlink in getattr(art, "related_links", []) or []:
+                if isinstance(rlink, dict) and rlink.get("url"):
+                    rl_url = str(rlink["url"]).strip()
+                    if rl_url and rl_url not in seen_urls:
+                        seen_urls.add(rl_url)
+                        rl_title = str(rlink.get("title", "")).strip() or art.title
+                        if rlink.get("outlet") and not rl_title.startswith(f"[{rlink['outlet']}]"):
+                            rl_title = f"{rlink['outlet']} - {rl_title}"
+                        links.append({"title": rl_title, "url": rl_url})
+            return links
+
         top_headlines: list[dict[str, Any]] = []
         articles_list: list[dict[str, Any]] = []
         chosen_article_ids: set[str] = set()
@@ -250,12 +265,7 @@ class NewsSummarizer:
                     "summary": art.summary or f"{art.outlet or '주요 언론'} 보도: {art.title}",
                     "impact": "해당 이슈가 사회 및 관련 산업 전반에 미치는 파급 효과에 주목이 쏠리고 있어요.",
                     "deepDive": make_default_deep_dive(cat_id, art.title, art.summary),
-                    "links": [
-                        {
-                            "title": f"{art.outlet} - {art.title}" if art.outlet else art.title,
-                            "url": art.url,
-                        }
-                    ],
+                    "links": _make_article_links(art),
                 })
 
         # If fewer than 3 headlines, select from remaining articles
@@ -273,21 +283,23 @@ class NewsSummarizer:
                             "summary": art.summary or f"{art.outlet or '주요 언론'} 보도: {art.title}",
                             "impact": "관련 정책 및 시장 환경 변화에 지속적인 영향이 예상돼요.",
                             "deepDive": make_default_deep_dive(cat_id, art.title, art.summary),
-                            "links": [
-                                {
-                                    "title": f"{art.outlet} - {art.title}" if art.outlet else art.title,
-                                    "url": art.url,
-                                }
-                            ],
+                            "links": _make_article_links(art),
                         })
 
-        # Category articles selection (up to 2 per category, continuing sequence from 4)
+        # Category articles selection (exact 3 articles per category or min(3, len(articles)))
         art_counter = len(top_headlines) + 1
         for cat_id in sorted(grouped_articles.keys()):
             cat_articles = grouped_articles[cat_id]
-            for art in cat_articles:
-                if art.id in chosen_article_ids and len(cat_articles) > 1:
-                    continue
+            if not cat_articles:
+                continue
+            target_count = min(3, len(cat_articles))
+
+            # Prioritize candidate articles not already selected as top headlines
+            unpicked = [art for art in cat_articles if art.id not in chosen_article_ids]
+            picked = [art for art in cat_articles if art.id in chosen_article_ids]
+            selected_for_cat = (unpicked + picked)[:target_count]
+
+            for art in selected_for_cat:
                 articles_list.append({
                     "id": art_counter,
                     "categoryId": cat_id,
@@ -295,16 +307,9 @@ class NewsSummarizer:
                     "summary": art.summary or f"{art.outlet or '언론사'} 보도: {art.title}",
                     "impact": "업계 동향 및 관련 시장 지표에 미치는 영향을 주시하고 있어요.",
                     "deepDive": make_default_deep_dive(cat_id, art.title, art.summary),
-                    "links": [
-                        {
-                            "title": f"{art.outlet} - {art.title}" if art.outlet else art.title,
-                            "url": art.url,
-                        }
-                    ],
+                    "links": _make_article_links(art),
                 })
                 art_counter += 1
-                if len([a for a in articles_list if a["categoryId"] == cat_id]) >= 2:
-                    break
 
         return {
             "briefingDate": briefing_date,
@@ -414,6 +419,7 @@ class NewsSummarizer:
                     break
                 if not any(h["headline"] == fb_item["headline"] for h in normalized_headlines):
                     copy_item = dict(fb_item)
+                    copy_item["links"] = [dict(l) for l in fb_item.get("links", [])]
                     copy_item["id"] = f"top-{len(normalized_headlines) + 1}"
                     normalized_headlines.append(copy_item)
 
@@ -451,6 +457,74 @@ class NewsSummarizer:
                 seen_articles.add(key)
                 deduped_articles.append(a)
         normalized_articles = deduped_articles
+
+        # Merge candidate related_links (multi-outlet sibling coverage) without duplicates
+        all_candidates: list[Article] = [
+            art for arts in grouped_articles.values() for art in arts
+        ]
+
+        def _merge_sibling_links(item: dict[str, Any]) -> None:
+            """Match briefing item with candidate articles and merge sibling links from art.related_links."""
+            item_links = item.get("links")
+            if not isinstance(item_links, list):
+                item_links = []
+                item["links"] = item_links
+
+            seen_urls: set[str] = {
+                str(l["url"]).strip()
+                for l in item_links
+                if isinstance(l, dict) and l.get("url")
+            }
+
+            item_headline = str(item.get("headline", "")).strip().lower()
+            item_cid = item.get("categoryId")
+
+            matched_candidates: list[Article] = []
+            for art in all_candidates:
+                art_urls = {art.url.strip()} if art.url else set()
+                for rl in getattr(art, "related_links", []) or []:
+                    if isinstance(rl, dict) and rl.get("url"):
+                        art_urls.add(str(rl["url"]).strip())
+
+                # Match 1: Any existing link URL in item matches candidate's url or its related_links urls
+                if seen_urls and (seen_urls & art_urls):
+                    matched_candidates.append(art)
+                    continue
+
+                # Match 2: Headline / Title match in the same category
+                art_title = art.title.strip().lower()
+                if art_title and item_headline and item_cid == art.category_id:
+                    if art_title == item_headline or art_title in item_headline or item_headline in art_title:
+                        matched_candidates.append(art)
+                        continue
+
+            for matched_art in matched_candidates:
+                # Merge candidate primary URL if not present
+                if matched_art.url and matched_art.url.strip() not in seen_urls:
+                    art_title = (
+                        f"{matched_art.outlet} - {matched_art.title}"
+                        if matched_art.outlet
+                        else matched_art.title
+                    )
+                    item_links.append({"title": art_title, "url": matched_art.url.strip()})
+                    seen_urls.add(matched_art.url.strip())
+
+                # Merge sibling links from art.related_links
+                for rl in getattr(matched_art, "related_links", []) or []:
+                    if isinstance(rl, dict) and rl.get("url"):
+                        rl_url = str(rl["url"]).strip()
+                        if rl_url and rl_url not in seen_urls:
+                            rl_title = str(rl.get("title", "")).strip() or matched_art.title
+                            if rl.get("outlet") and not rl_title.startswith(f"[{rl['outlet']}]"):
+                                rl_title = f"{rl['outlet']} - {rl_title}"
+                            item_links.append({"title": rl_title, "url": rl_url})
+                            seen_urls.add(rl_url)
+
+        for h in normalized_headlines:
+            _merge_sibling_links(h)
+
+        for a in normalized_articles:
+            _merge_sibling_links(a)
 
         # Assign continuous sequential integer IDs: 1..3 for top headlines, 4..N for articles
         for idx, item in enumerate(normalized_headlines, start=1):

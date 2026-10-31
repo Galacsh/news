@@ -66,6 +66,9 @@ SYSTEM_PROMPT: str = (
     "You are the Editor-in-Chief and Senior Newsroom Desk Editor for a premier South Korean daily news briefing.\n"
     "Your mission is to analyze, synthesize, and curate candidate news articles from verified South Korean news "
     "outlets into a highly credible, approachable, and objective daily morning briefing.\n\n"
+    "CRITICAL ARTICLE CURATION MANDATE:\n"
+    "- EXACT 3 ARTICLES PER CATEGORY: For EVERY category with candidate articles, you MUST curate EXACTLY 3 distinct articles in 'articles' (unless a category has fewer than 3 candidates, in which case curate all available candidates). Never output 1 or 2 articles when 3 or more candidates exist for that category.\n"
+    "- TOP 3 HEADLINES: Curate EXACTLY 3 highest-impact stories across all categories for 'topHeadlines'.\n\n"
     "CRITICAL LANGUAGE & SPEECH STYLE MANDATE:\n"
     "- ALL generated narrative content ('headline', 'summary' [핵심], 'impact' [파급], and 'deepDive' sections) MUST be written in natural, fluent Korean (한국어).\n"
     "- TONE & SPEECH STYLE (해요체 필수):\n"
@@ -75,13 +78,15 @@ SYSTEM_PROMPT: str = (
     "- Only identifiers ('id', 'categoryId') and source 'url's should remain in their original formats.\n"
     "- DIRECT ARTICLE LINKS ONLY: In 'links', you MUST strictly copy the exact original article 'url' and 'title' from the candidate articles provided. NEVER invent, hallucinate, or substitute search engine links (e.g. search.naver.com, search.daum.net, google search). Only direct media outlet URLs are allowed.\n\n"
     "Editorial Guidelines:\n"
-    "1. Neutrality & Tone: Maintain an objective, balanced journalistic tone while using friendly, polite '해요체'. Avoid sensationalism.\n"
-    "2. Summary ('핵심'): Explain the core facts (who, what, when, where, why, how) in 1 to 2 complete Korean sentences ending strictly in '해요체'.\n"
-    "3. Impact ('파급'): Analyze the broader societal, economic, policy, or everyday life implications in 1 to 2 complete Korean sentences ending strictly in '해요체'.\n"
-    "4. DeepDive ('심층 분석'): For each news item (both topHeadlines and articles), generate a 'deepDive' object matching the designated analytical lens (lensTitle and section labels) of its category. Each section content must be 1 to 2 insightful sentences in '해요체'.\n"
-    "5. Formatting: Write clean continuous prose. Do NOT include bullet points (-, *, •), lists, or markdown symbols inside 'summary', 'impact', or 'deepDive' content.\n"
-    "6. Factual Grounding: Strictly avoid hallucination. Base every statement strictly on facts provided in candidate articles.\n"
-    "7. JSON Schema: Strictly conform to the requested JSON response schema."
+    "1. Article Quantity Mandate: For EVERY category with candidate articles, curate EXACTLY 3 distinct articles in 'articles' (or min(3, candidate count) if fewer candidates exist). Never output 1 or 2 articles when 3 or more candidates exist.\n"
+    "2. Neutrality & Tone: Maintain an objective, balanced journalistic tone while using friendly, polite '해요체'. Avoid sensationalism.\n"
+    "3. Summary ('핵심'): Explain the core facts (who, what, when, where, why, how) in 1 to 2 complete Korean sentences ending strictly in '해요체'.\n"
+    "4. Impact ('파급'): Analyze the broader societal, economic, policy, or everyday life implications in 1 to 2 complete Korean sentences ending strictly in '해요체'.\n"
+    "5. DeepDive ('심층 분석'): For each news item (both topHeadlines and articles), generate a 'deepDive' object matching the designated analytical lens (lensTitle and section labels) of its category. Each section content must be 1 to 2 insightful sentences in '해요체'.\n"
+    "6. Multi-outlet Source Links: For each curated story in 'articles' and 'topHeadlines', you MUST include ALL available source links (main article and related multi-outlet links) in 'links' so readers can see the full cross-validation coverage.\n"
+    "7. Formatting: Write clean continuous prose. Do NOT include bullet points (-, *, •), lists, or markdown symbols inside 'summary', 'impact', or 'deepDive' content.\n"
+    "8. Factual Grounding: Strictly avoid hallucination. Base every statement strictly on facts provided in candidate articles.\n"
+    "9. JSON Schema: Strictly conform to the requested JSON response schema."
 )
 
 
@@ -142,7 +147,7 @@ BRIEFING_RESPONSE_SCHEMA: dict[str, Any] = {
         },
         "articles": {
             "type": "ARRAY",
-            "description": "Curated in-depth briefing articles categorized by topic. All text fields must be in Korean.",
+            "description": "Curated in-depth briefing articles categorized by topic. For every category with candidate articles, must contain EXACTLY 3 distinct articles (or all available candidates if fewer than 3). Never output 1 or 2 articles when 3 or more candidates exist. All text fields must be in Korean.",
             "items": {
                 "type": "OBJECT",
                 "properties": {
@@ -192,19 +197,20 @@ def build_briefing_prompt(
         "",
         "## Editorial & Synthesis Instructions",
         "1. [topHeadlines]: Select EXACTLY 3 of the most impactful, high-priority news stories across ALL categories for the top headlines.",
-        "2. [articles]: For each category, curate 1 to 3 significant stories. Omit categories that have no candidate articles.",
-        "3. CRITICAL LANGUAGE & SPEECH STYLE REQUIREMENT:",
+        "2. [articles]: For EVERY category with candidate articles, curate EXACTLY 3 distinct articles (or all available candidates if fewer than 3 exist). Never output 1 or 2 articles when 3 or more candidates exist for that category. Omit categories that have no candidate articles.",
+        "3. Multi-outlet Source Links: For each curated story in 'articles' and 'topHeadlines', you MUST include ALL available source links (main article and related multi-outlet links) in 'links' so readers can see the full cross-validation coverage.",
+        "4. CRITICAL LANGUAGE & SPEECH STYLE REQUIREMENT:",
         "   - All generated 'headline', 'summary' (핵심), 'impact' (파급), and 'deepDive' values MUST be written in natural Korean (한국어).",
         "   - 'summary' (핵심), 'impact' (파급), and all 'deepDive' section contents MUST be written strictly in polite informal style ('해요체', e.g. '~해요', '~돼요', '~있어요', '~전망이에요'). Do NOT use '~합니다' or '~습니다'.",
-        "4. Required attributes for every item:",
+        "5. Required attributes for every item:",
         "   - id: Unique sequential integer ID (1, 2, 3 for topHeadlines, continuing 4, 5, 6... for articles)",
         "   - categoryId: Integer ID corresponding to the category of the news event",
         "   - headline: Accurate, engaging headline in Korean",
         "   - summary: Concise factual summary in 1-2 complete Korean sentences ending strictly in 해요체 (no bullet points or markdown lists)",
         "   - impact: Significance and societal/economic repercussions in 1-2 complete Korean sentences ending strictly in 해요체 (no bullet points)",
         "   - deepDive: Category-tailored analytical deep dive object containing 'lensTitle' and 'sections' matching the category lens. Each section content must be 1-2 sentences in 해요체.",
-        "   - links: List of referenced source articles with their original Korean 'title' and direct article 'url' (copy directly from candidate articles, strictly DO NOT use search engine query links)",
-        "5. Factual accuracy: Base all synthesis strictly on the provided candidate articles with zero hallucination.",
+        "   - links: List of referenced source articles with their original Korean 'title' and direct article 'url' (copy directly from candidate articles, including main article and related multi-outlet coverage links; strictly DO NOT use search engine query links)",
+        "6. Factual accuracy: Base all synthesis strictly on the provided candidate articles with zero hallucination.",
         "",
         "## Category DeepDive Analytical Lenses (Mandatory):",
     ]
@@ -245,6 +251,19 @@ def build_briefing_prompt(
                     clean_body = clean_body[:297] + "..."
                 lines.append(f"  Body Excerpt: {clean_body}")
             lines.append(f"  URL: {art.url}")
+            related_links = getattr(art, "related_links", None)
+            if related_links:
+                formatted_rls: list[str] = []
+                for rl in related_links:
+                    if isinstance(rl, dict) and rl.get("url"):
+                        rl_outlet = f"[{rl['outlet']}] " if rl.get("outlet") else ""
+                        rl_title = str(rl.get("title", "")).strip()
+                        if rl_outlet and rl_title.startswith(rl_outlet):
+                            rl_title = rl_title[len(rl_outlet):].strip()
+                        rl_url = str(rl.get("url", "")).strip()
+                        formatted_rls.append(f"{rl_outlet}{rl_title} ({rl_url})")
+                if formatted_rls:
+                    lines.append(f"  Related Links (Multi-outlet coverage): {', '.join(formatted_rls)}")
 
     lines.append("\nGenerate the briefing JSON adhering strictly to the response schema.")
     return "\n".join(lines)

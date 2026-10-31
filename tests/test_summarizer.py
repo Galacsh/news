@@ -680,3 +680,184 @@ def test_build_briefing_prompt_includes_lenses_and_body_excerpt():
     assert "거품 vs 진짜 기술 변곡점" in prompt
     assert "Body Excerpt:" in prompt
     assert "기사의 상세 본문 내용" in prompt
+
+
+def test_build_briefing_prompt_enforces_exact_three_articles_and_related_links():
+    """Verify build_briefing_prompt mandates exact 3 articles per category and renders related links."""
+    from src.llm.prompts import SYSTEM_PROMPT, build_briefing_prompt
+
+    art1 = Article(
+        id="art-cluster-1",
+        title="합의된 대표 기사 제목",
+        summary="대표 요약문",
+        url="https://example.com/main-article",
+        outlet="연합뉴스",
+        published_at="2026-10-25T08:00:00Z",
+        category="정치",
+        category_id=1,
+        related_links=[
+            {"title": "다른 매체 기사 1", "url": "https://example.com/related-1", "outlet": "조선일보"},
+            {"title": "다른 매체 기사 2", "url": "https://example.com/related-2", "outlet": "동아일보"},
+        ],
+    )
+
+    prompt = build_briefing_prompt({1: [art1]})
+
+    # Mandate check in prompt instructions
+    assert "For EVERY category with candidate articles, curate EXACTLY 3 distinct articles" in prompt
+    assert "For each curated story in 'articles' and 'topHeadlines', you MUST include ALL available source links (main article and related multi-outlet links) in 'links' so readers can see the full cross-validation coverage." in prompt
+
+    # Related links formatting check
+    assert "Related Links (Multi-outlet coverage):" in prompt
+    assert "[조선일보] 다른 매체 기사 1 (https://example.com/related-1)" in prompt
+    assert "[동아일보] 다른 매체 기사 2 (https://example.com/related-2)" in prompt
+
+    # Mandate check in SYSTEM_PROMPT
+    assert "EXACT 3 ARTICLES PER CATEGORY: For EVERY category with candidate articles, you MUST curate EXACTLY 3 distinct articles" in SYSTEM_PROMPT
+
+
+def test_extract_fallback_briefing_exact_three_articles_per_category():
+    """Verify extractive fallback enforces exactly 3 articles per category (or min(3, len(articles)))."""
+    summarizer = NewsSummarizer()
+
+    # Category 1: 5 articles (should produce exactly 3 articles)
+    cat1_articles = [
+        Article(
+            id=f"cat1-{i}",
+            title=f"정치 기사 {i}",
+            summary=f"정치 요약 {i}",
+            url=f"https://example.com/pol/{i}",
+            outlet="연합뉴스",
+            published_at=f"2026-10-25T08:0{i}:00Z",
+            category="정치",
+            category_id=1,
+        )
+        for i in range(1, 6)
+    ]
+
+    # Category 2: 3 articles (should produce exactly 3 articles)
+    cat2_articles = [
+        Article(
+            id=f"cat2-{i}",
+            title=f"경제 기사 {i}",
+            summary=f"경제 요약 {i}",
+            url=f"https://example.com/econ/{i}",
+            outlet="매일경제",
+            published_at=f"2026-10-25T08:1{i}:00Z",
+            category="경제·금융",
+            category_id=2,
+        )
+        for i in range(1, 4)
+    ]
+
+    # Category 3: 2 articles (should produce min(3, 2) = 2 articles)
+    cat3_articles = [
+        Article(
+            id=f"cat3-{i}",
+            title=f"산업 기사 {i}",
+            summary=f"산업 요약 {i}",
+            url=f"https://example.com/ind/{i}",
+            outlet="한국경제",
+            published_at=f"2026-10-25T08:2{i}:00Z",
+            category="산업·기업",
+            category_id=3,
+        )
+        for i in range(1, 3)
+    ]
+
+    grouped = {1: cat1_articles, 2: cat2_articles, 3: cat3_articles}
+    briefing = summarizer.extract_fallback_briefing(grouped, briefing_date="2026-10-25T12:00:00Z")
+
+    assert len(briefing["topHeadlines"]) == 3
+
+    articles = briefing["articles"]
+    c1_out = [a for a in articles if a["categoryId"] == 1]
+    c2_out = [a for a in articles if a["categoryId"] == 2]
+    c3_out = [a for a in articles if a["categoryId"] == 3]
+
+    assert len(c1_out) == 3
+    assert len(c2_out) == 3
+    assert len(c3_out) == 2
+
+
+def test_normalize_briefing_payload_merges_candidate_related_links():
+    """Verify _normalize_briefing_payload attaches sibling links from candidate art.related_links without duplicates."""
+    candidate_art = Article(
+        id="cand-1",
+        title="중요 사건에 대한 대표 기사",
+        summary="대표 요약",
+        url="https://example.com/main",
+        outlet="주요언론",
+        published_at="2026-10-25T08:00:00Z",
+        category="정치",
+        category_id=1,
+        related_links=[
+            {"title": "다른 매체 기사 1", "url": "https://example.com/related-1", "outlet": "언론사A"},
+            {"title": "다른 매체 기사 2", "url": "https://example.com/related-2", "outlet": "언론사B"},
+        ],
+    )
+
+    grouped = {1: [candidate_art]}
+
+    # Mock LLM returns briefing item that cites only the main URL
+    raw_payload = {
+        "topHeadlines": [
+            {
+                "id": "th-1",
+                "categoryId": 1,
+                "headline": "중요 사건 종합 분석",
+                "summary": "핵심 분석 내용이에요.",
+                "impact": "향후 정책에 지대한 영향을 미칠 전망이에요.",
+                "deepDive": {
+                    "lensTitle": "의도와 실현 가능성",
+                    "sections": [
+                        {"label": "왜 지금 나왔나 (숨은 셈법)", "content": "정치적 국면 전환을 위한 의도예요."},
+                        {"label": "실제 통과·시행 가능성과 효력", "content": "실제 통과 효력이 즉시 발생해요."},
+                    ],
+                },
+                "links": [{"title": "주요언론 - 대표 기사", "url": "https://example.com/main"}],
+            }
+        ],
+        "articles": [
+            {
+                "id": "art-1",
+                "categoryId": 1,
+                "headline": "중요 사건에 대한 대표 기사",
+                "summary": "상세 분석 내용이에요.",
+                "impact": "파급 효과가 지속될 전망이에요.",
+                "deepDive": {
+                    "lensTitle": "의도와 실현 가능성",
+                    "sections": [
+                        {"label": "왜 지금 나왔나 (숨은 셈법)", "content": "숨은 셈법 분석이에요."},
+                        {"label": "실제 통과·시행 가능성과 효력", "content": "효력 분석이에요."},
+                    ],
+                },
+                # Already partially includes related-1, but missing related-2
+                "links": [
+                    {"title": "주요언론 - 대표 기사", "url": "https://example.com/main"},
+                    {"title": "언론사A - 다른 매체 기사 1", "url": "https://example.com/related-1"},
+                ],
+            }
+        ],
+    }
+
+    summarizer = NewsSummarizer()
+    normalized = summarizer._normalize_briefing_payload(raw_payload, grouped, briefing_date="2026-10-25T12:00:00Z")
+
+    # Verify topHeadline has both sibling links merged
+    th_links = normalized["topHeadlines"][0]["links"]
+    th_urls = [l["url"] for l in th_links]
+    assert "https://example.com/main" in th_urls
+    assert "https://example.com/related-1" in th_urls
+    assert "https://example.com/related-2" in th_urls
+    assert len(th_urls) == len(set(th_urls))  # No duplicates
+
+    # Verify article has missing sibling link merged without duplicating existing related-1
+    art_links = normalized["articles"][0]["links"]
+    art_urls = [l["url"] for l in art_links]
+    assert "https://example.com/main" in art_urls
+    assert "https://example.com/related-1" in art_urls
+    assert "https://example.com/related-2" in art_urls
+    assert len(art_urls) == len(set(art_urls))  # No duplicates
+    assert len(art_urls) == 3
+
