@@ -1440,5 +1440,94 @@ def test_run_pipeline_end_to_end_quota_and_multi_link(
     assert "https://example.com/econ/hk/1" in all_econ_urls
 
 
+def test_pipeline_links_hard_cap_at_five(
+    tmp_path: Path,
+    mock_feeds_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify pipeline output links never exceed 5 items even when candidate article has 50 or 1,000 related_links."""
+    pipeline = DailyBriefingPipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=tmp_path / "data_cap_links",
+        dry_run=True,
+        date="2026-10-25",
+    )
+
+    massive_related_links = [
+        {"title": f"언론사{i} 보도", "url": f"https://example.com/pol/link-{i}", "outlet": f"언론사{i}"}
+        for i in range(1, 1001)
+    ]
+    lead_article = Article(
+        id="pol-massive",
+        title="1,000개 관련 링크를 보유한 기사",
+        summary="방대한 관련 보도가 존재하는 뉴스 요약입니다.",
+        url="https://example.com/pol/main",
+        outlet="주요언론",
+        published_at="2026-10-25T09:00:00Z",
+        category="정치",
+        category_id=1,
+        related_links=massive_related_links,
+    )
+    other_art_1 = Article(
+        id="pol-2",
+        title="정치 정책 발표 2",
+        summary="정치 요약 2",
+        url="https://example.com/pol/sub2",
+        outlet="한겨레",
+        published_at="2026-10-25T09:10:00Z",
+        category="정치",
+        category_id=1,
+        related_links=[
+            {"title": f"서브 링크 {i}", "url": f"https://example.com/pol/sub2-{i}", "outlet": f"서브{i}"}
+            for i in range(1, 51)
+        ],
+    )
+    other_art_2 = Article(
+        id="pol-3",
+        title="정치 정책 발표 3",
+        summary="정치 요약 3",
+        url="https://example.com/pol/sub3",
+        outlet="동아일보",
+        published_at="2026-10-25T09:20:00Z",
+        category="정치",
+        category_id=1,
+    )
+
+    candidates = [lead_article, other_art_1, other_art_2]
+
+    # 1. Standard flow
+    res = pipeline.summarize(candidates)
+    for h in res.get("topHeadlines", []):
+        assert len(h.get("links", [])) <= 5
+    for a in res.get("articles", []):
+        assert len(a.get("links", [])) <= 5
+
+    lead_items = [
+        a for a in res["articles"]
+        if any(isinstance(l, dict) and l.get("url") == "https://example.com/pol/main" for l in a.get("links", []))
+    ]
+    assert lead_items
+    assert len(lead_items[0]["links"]) == 5
+
+    # 2. Fallback flow (direct pipeline link synthesis and supplementation)
+    def mock_fail(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("Simulated LLM failure")
+
+    monkeypatch.setattr(pipeline.summarizer, "summarize_articles", mock_fail)
+    fb_res = pipeline.summarize(candidates)
+    for h in fb_res.get("topHeadlines", []):
+        assert len(h.get("links", [])) <= 5
+    for a in fb_res.get("articles", []):
+        assert len(a.get("links", [])) <= 5
+
+    fb_lead_items = [
+        a for a in fb_res["articles"]
+        if any(isinstance(l, dict) and l.get("url") == "https://example.com/pol/main" for l in a.get("links", []))
+    ]
+    assert fb_lead_items
+    assert len(fb_lead_items[0]["links"]) == 5
+
+
+
 
 

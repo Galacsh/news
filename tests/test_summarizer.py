@@ -861,3 +861,64 @@ def test_normalize_briefing_payload_merges_candidate_related_links():
     assert len(art_urls) == len(set(art_urls))  # No duplicates
     assert len(art_urls) == 3
 
+
+def test_normalize_briefing_payload_hard_caps_links_at_five():
+    """Verify links list never exceeds 5 items even if candidate article has 50 or 1,000 related_links."""
+    many_related_links = [
+        {"title": f"매체 보도 {i}", "url": f"https://example.com/related/{i}", "outlet": f"매체{i}"}
+        for i in range(1, 1001)
+    ]
+    candidate_art = Article(
+        id="cand-huge-links",
+        title="대규모 관련 보도가 있는 기사",
+        summary="대규모 보도 요약",
+        url="https://example.com/main",
+        outlet="주요언론",
+        published_at="2026-10-25T08:00:00Z",
+        category="정치",
+        category_id=1,
+        related_links=many_related_links,
+    )
+    grouped = {1: [candidate_art]}
+    raw_payload = {
+        "topHeadlines": [
+            {
+                "id": "th-1",
+                "categoryId": 1,
+                "headline": "대규모 관련 보도가 있는 기사 헤드라인",
+                "summary": "헤드라인 요약",
+                "impact": "파급 효과 요약",
+                "links": [{"title": "주요언론 - 대표 기사", "url": "https://example.com/main"}],
+            }
+        ],
+        "articles": [
+            {
+                "id": "art-1",
+                "categoryId": 1,
+                "headline": "대규모 관련 보도가 있는 기사",
+                "summary": "기사 요약",
+                "impact": "파급 효과 요약",
+                "links": [{"title": "주요언론 - 대표 기사", "url": "https://example.com/main"}],
+            }
+        ],
+    }
+
+    summarizer = NewsSummarizer()
+    normalized = summarizer._normalize_briefing_payload(raw_payload, grouped, briefing_date="2026-10-25T12:00:00Z")
+
+    for th in normalized["topHeadlines"]:
+        assert len(th["links"]) <= 5
+        assert len(th["links"]) == 5
+
+    for art in normalized["articles"]:
+        assert len(art["links"]) <= 5
+        assert len(art["links"]) == 5
+
+
+def test_sanitize_links_hard_caps_at_five():
+    """Verify _sanitize_links returns at most 5 links even if given 50+ links."""
+    summarizer = NewsSummarizer()
+    excess_links = [{"title": f"기사 {i}", "url": f"https://example.com/article/{i}"} for i in range(50)]
+    sanitized = summarizer._sanitize_links(excess_links, cat_id=1, cat_links={}, all_links=[])
+    assert len(sanitized) == 5
+

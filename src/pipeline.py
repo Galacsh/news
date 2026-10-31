@@ -469,6 +469,8 @@ class DailyBriefingPipeline:
             links: list[dict[str, str]] = [{"title": main_title, "url": art.url}]
             seen_urls = {art.url}
             for rlink in getattr(art, "related_links", []) or []:
+                if len(links) >= 5:
+                    break
                 if isinstance(rlink, dict) and rlink.get("url"):
                     rl_url = str(rlink["url"]).strip()
                     if rl_url and rl_url not in seen_urls:
@@ -477,7 +479,7 @@ class DailyBriefingPipeline:
                         if rlink.get("outlet") and not rl_title.startswith(f"[{rlink['outlet']}]"):
                             rl_title = f"{rlink['outlet']} - {rl_title}"
                         links.append({"title": rl_title, "url": rl_url})
-            return links
+            return links[:5]
 
         all_candidate_urls: set[str] = set()
         for art in articles:
@@ -504,6 +506,8 @@ class DailyBriefingPipeline:
                 sanitized_links.insert(0, {"title": main_title, "url": cand.url.strip()})
                 seen_urls.add(cand.url.strip())
             for rl in getattr(cand, "related_links", []) or []:
+                if len(sanitized_links) >= 5:
+                    break
                 if isinstance(rl, dict) and rl.get("url"):
                     rl_url = str(rl["url"]).strip()
                     if rl_url and rl_url not in seen_urls:
@@ -514,6 +518,7 @@ class DailyBriefingPipeline:
                         seen_urls.add(rl_url)
             if not sanitized_links:
                 sanitized_links = _make_candidate_links(cand)
+            sanitized_links = sanitized_links[:5]
             item["links"] = sanitized_links
 
         # 1. Process topHeadlines: retain candidate multi-outlet source links

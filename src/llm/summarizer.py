@@ -499,26 +499,34 @@ class NewsSummarizer:
                         continue
 
             for matched_art in matched_candidates:
+                if len(item_links) >= 5:
+                    break
                 # Merge candidate primary URL if not present
                 if matched_art.url and matched_art.url.strip() not in seen_urls:
-                    art_title = (
-                        f"{matched_art.outlet} - {matched_art.title}"
-                        if matched_art.outlet
-                        else matched_art.title
-                    )
-                    item_links.append({"title": art_title, "url": matched_art.url.strip()})
-                    seen_urls.add(matched_art.url.strip())
+                    if len(item_links) < 5:
+                        art_title = (
+                            f"{matched_art.outlet} - {matched_art.title}"
+                            if matched_art.outlet
+                            else matched_art.title
+                        )
+                        item_links.append({"title": art_title, "url": matched_art.url.strip()})
+                        seen_urls.add(matched_art.url.strip())
 
                 # Merge sibling links from art.related_links
                 for rl in getattr(matched_art, "related_links", []) or []:
+                    if len(item_links) >= 5:
+                        break
                     if isinstance(rl, dict) and rl.get("url"):
                         rl_url = str(rl["url"]).strip()
                         if rl_url and rl_url not in seen_urls:
-                            rl_title = str(rl.get("title", "")).strip() or matched_art.title
-                            if rl.get("outlet") and not rl_title.startswith(f"[{rl['outlet']}]"):
-                                rl_title = f"{rl['outlet']} - {rl_title}"
-                            item_links.append({"title": rl_title, "url": rl_url})
-                            seen_urls.add(rl_url)
+                            if len(item_links) < 5:
+                                rl_title = str(rl.get("title", "")).strip() or matched_art.title
+                                if rl.get("outlet") and not rl_title.startswith(f"[{rl['outlet']}]"):
+                                    rl_title = f"{rl['outlet']} - {rl_title}"
+                                item_links.append({"title": rl_title, "url": rl_url})
+                                seen_urls.add(rl_url)
+
+            item["links"] = item_links[:5]
 
         for h in normalized_headlines:
             _merge_sibling_links(h)
@@ -559,7 +567,7 @@ class NewsSummarizer:
     ) -> list[dict[str, str]]:
         """Ensure links is a non-empty list of {title, url} dicts, rejecting search query URLs."""
         search_domains = ("search.naver.com", "search.daum.net", "google.com/search")
-        sanitized: list[dict[str, str]] = []
+        clean_links: list[dict[str, str]] = []
         if isinstance(links, list):
             for l in links:
                 if isinstance(l, dict) and l.get("url"):
@@ -567,13 +575,13 @@ class NewsSummarizer:
                     # Strictly discard search engine query URLs
                     if any(domain in raw_url for domain in search_domains):
                         continue
-                    sanitized.append({
+                    clean_links.append({
                         "title": str(l.get("title", "")).strip() or "원문 기사",
                         "url": raw_url,
                     })
 
-        if sanitized:
-            return sanitized
+        if clean_links:
+            return clean_links[:5]
 
         # Fallback to category candidate links or global candidate links
         if cat_id in cat_links and cat_links[cat_id]:
