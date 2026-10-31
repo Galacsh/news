@@ -8,6 +8,7 @@ import pytest
 
 ARCHIVE_HTML_PATH = Path("archive.html")
 INDEX_HTML_PATH = Path("index.html")
+DETAIL_HTML_PATH = Path("detail.html")
 
 
 class DOMIdParser(html.parser.HTMLParser):
@@ -85,6 +86,21 @@ def index_dom(index_html_content: str) -> DOMIdParser:
     """Fixture to parse index.html into DOM structures."""
     parser = DOMIdParser()
     parser.feed(index_html_content)
+    return parser
+
+
+@pytest.fixture(scope="module")
+def detail_html_content() -> str:
+    """Fixture to load detail.html content."""
+    assert DETAIL_HTML_PATH.exists(), f"{DETAIL_HTML_PATH} does not exist."
+    return DETAIL_HTML_PATH.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def detail_dom(detail_html_content: str) -> DOMIdParser:
+    """Fixture to parse detail.html into DOM structures."""
+    parser = DOMIdParser()
+    parser.feed(detail_html_content)
     return parser
 
 
@@ -277,3 +293,119 @@ def test_intra_day_runs_simulation():
     # Single run on 2026-10-24
     assert len(grouped["2026-10-24"]) == 1
     assert grouped["2026-10-24"][0]["filename"] == "2026-10-24.json"
+
+
+def test_detail_html_exists(detail_html_content: str):
+    """Verify detail.html exists, has content, and starts with <!doctype html>."""
+    assert len(detail_html_content.strip()) > 0
+    assert detail_html_content.strip().lower().startswith("<!doctype html>")
+
+
+def test_detail_html_head_and_cdns(detail_dom: DOMIdParser, detail_html_content: str):
+    """Verify HTML5 standards, viewport meta, Tailwind CSS, Phosphor Icons, Pretendard, and dark theme."""
+    # Viewport meta tag
+    has_viewport = any(
+        m.get("name") == "viewport" and "width=device-width" in m.get("content", "")
+        for m in detail_dom.meta_tags
+    )
+    assert has_viewport, "Missing standard viewport meta tag in detail.html"
+
+    # Charset meta tag
+    has_charset = any("charset" in m for m in detail_dom.meta_tags)
+    assert has_charset, "Missing charset meta tag in detail.html"
+
+    # Tailwind CSS CDN
+    has_tailwind = any("cdn.tailwindcss.com" in s for s in detail_dom.scripts)
+    assert has_tailwind, "Missing Tailwind CSS CDN script tag in detail.html"
+
+    # Phosphor Icons CDN
+    has_phosphor = any("@phosphor-icons/web" in s for s in detail_dom.scripts)
+    assert has_phosphor, "Missing Phosphor Icons CDN script tag in detail.html"
+
+    # Pretendard font extension in Tailwind configuration
+    assert "Pretendard" in detail_html_content
+
+    # Dark slate theme classes
+    assert "bg-slate-950" in detail_dom.classes
+    assert "text-slate-100" in detail_dom.classes
+
+
+def test_detail_html_dom_structures(detail_dom: DOMIdParser, detail_html_content: str):
+    """Verify detail.html DOM structures: header back link, category badge, headline, summary, impact, deepDive, and non-collapsible links."""
+    # Header navigation & elements
+    assert "backToMainLink" in detail_dom.ids
+    back_links = [l for l in detail_dom.links if l.get("id") == "backToMainLink"]
+    assert len(back_links) == 1
+    assert back_links[0].get("href") == "index.html"
+    assert "categoryBadge" in detail_dom.ids
+    assert "briefingDate" in detail_dom.ids
+
+    # Core content sections
+    assert "articleHeadline" in detail_dom.ids
+    assert "articleSummary" in detail_dom.ids
+    assert "articleImpact" in detail_dom.ids
+
+    # Deep-Dive analytical section
+    assert "deepDiveSection" in detail_dom.ids
+    assert "lensTitleBadge" in detail_dom.ids
+    assert "lensTitleText" in detail_dom.ids
+    assert "deepDiveSectionsContainer" in detail_dom.ids
+    assert "deepDiveFallbackNotice" in detail_dom.ids
+
+    # Related source articles: always visible expanded list
+    assert "relatedArticlesSection" in detail_dom.ids
+    assert "relatedLinksList" in detail_dom.ids
+    assert "articlesCountBadge" in detail_dom.ids
+
+    # Non-collapsible: no accordion or toggle button inside related links list
+    assert "toggleCardView" not in detail_html_content
+    assert "summary-view" not in detail_html_content
+    assert "articles-view" not in detail_html_content
+
+
+def test_detail_html_javascript_logic(detail_html_content: str):
+    """Verify detail.html script logic handles id/archive params, cache busting, deepDive rendering, and graceful fallbacks."""
+    # URL query parameter parsing
+    assert "URLSearchParams" in detail_html_content
+    assert 'urlParams.get("id")' in detail_html_content or "urlParams.get('id')" in detail_html_content
+    assert 'urlParams.get("archive")' in detail_html_content or "urlParams.get('archive')" in detail_html_content
+    assert 'urlParams.get("date")' in detail_html_content or "urlParams.get('date')" in detail_html_content
+
+    # Preserves archive/date param on backToMainLink
+    assert "index.html?archive=" in detail_html_content
+    assert "index.html?date=" in detail_html_content
+
+    # Cache busting logic
+    assert "Date.now()" in detail_html_content or "_t=" in detail_html_content
+
+    # Dynamic target resolution for data/latest.json or data/archive/
+    assert "data/latest.json" in detail_html_content
+    assert "data/archive/" in detail_html_content
+
+    # Deep-Dive rendering and fallback logic
+    assert "deepDive" in detail_html_content
+    assert "lensTitle" in detail_html_content
+    assert "sections" in detail_html_content
+    assert "deepDiveFallbackNotice" in detail_html_content
+
+
+def test_index_html_card_navigation_to_detail(index_html_content: str):
+    """Verify index.html cards navigate to detail.html with id and preserved archive param, and toggle views are removed."""
+    # Navigation to detail.html
+    assert "detail.html?id=" in index_html_content
+    assert "&archive=" in index_html_content
+
+    # Removal of toggleCardView button and hidden articles view
+    assert "toggleCardView" not in index_html_content
+    assert "articles-view-" not in index_html_content
+
+    # Retains core facts (summary and impact)
+    assert "핵심" in index_html_content
+    assert "파급" in index_html_content
+    assert "자세히 보기" in index_html_content
+
+
+def test_archive_html_detail_navigation(archive_html_content: str):
+    """Verify archive.html preview cards navigate to detail.html with id and archive query parameters."""
+    assert "detail.html?id=" in archive_html_content
+    assert "&archive=" in archive_html_content

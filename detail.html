@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="ko">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>대한민국 주요 뉴스 브리핑 - 심층 분석</title>
+        <!-- Tailwind CSS CDN -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- Phosphor Icons CDN -->
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sans: [
+                                "Pretendard",
+                                "-apple-system",
+                                "BlinkMacSystemFont",
+                                "system-ui",
+                                "Roboto",
+                                "sans-serif",
+                            ],
+                        },
+                    },
+                },
+            };
+        </script>
+        <style>
+            .custom-scroll::-webkit-scrollbar {
+                width: 5px;
+            }
+            .custom-scroll::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            .custom-scroll::-webkit-scrollbar-thumb {
+                background: rgba(148, 163, 184, 0.25);
+                border-radius: 9999px;
+            }
+            .custom-scroll::-webkit-scrollbar-thumb:hover {
+                background: rgba(148, 163, 184, 0.45);
+            }
+        </style>
+    </head>
+    <body
+        class="bg-slate-950 text-slate-100 min-h-screen antialiased font-sans flex flex-col justify-between selection:bg-sky-500/30 selection:text-sky-200"
+    >
+        <!-- Static Top Navigation Header -->
+        <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-30 shadow-md">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3">
+                <a
+                    href="index.html"
+                    id="backToMainLink"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700/60 transition shadow-sm group shrink-0"
+                >
+                    <i class="ph-bold ph-arrow-left text-xs transition-transform group-hover:-translate-x-0.5"></i>
+                    <span>메인 브리핑으로</span>
+                </a>
+
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span
+                        id="categoryBadge"
+                        class="inline-flex items-center justify-center h-[30px] px-3 rounded-lg text-xs font-semibold border bg-blue-950/60 text-blue-300 border-blue-800 shrink-0"
+                    >
+                        브리핑 상세
+                    </span>
+                    <span
+                        id="briefingDate"
+                        class="text-xs text-slate-400 font-medium truncate hidden sm:inline"
+                    ></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+            <!-- Loading State -->
+            <div id="loadingState" class="py-24 text-center">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-900 border border-slate-800 text-sky-400 mb-4 animate-spin">
+                    <i class="ph-bold ph-spinner-gap text-2xl"></i>
+                </div>
+                <p class="text-sm font-medium text-slate-400">심층 분석 브리핑을 불러오는 중입니다...</p>
+            </div>
+
+            <!-- Error / Empty State -->
+            <div id="errorState" class="hidden py-16 text-center bg-slate-900 border border-slate-800 rounded-2xl p-8">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 mb-4">
+                    <i class="ph-bold ph-warning-circle text-2xl"></i>
+                </div>
+                <h2 id="errorMessage" class="text-base font-bold text-white mb-2">기사를 찾을 수 없습니다.</h2>
+                <p id="errorDetail" class="text-xs sm:text-sm text-slate-400 mb-6">요청하신 기사 정보가 존재하지 않거나 브리핑 파일을 불러오지 못했습니다.</p>
+                <a
+                    href="index.html"
+                    id="errorBackBtn"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 transition"
+                >
+                    <i class="ph-bold ph-arrow-left"></i>
+                    <span>메인 브리핑으로 돌아가기</span>
+                </a>
+            </div>
+
+            <!-- Detail Content (Visible on Success) -->
+            <div id="detailContent" class="hidden space-y-8">
+                <!-- Headline Section -->
+                <section class="space-y-3">
+                    <div class="flex items-center gap-2 text-xs text-slate-400">
+                        <i class="ph-bold ph-newspaper text-sky-400"></i>
+                        <span id="headlineDate"></span>
+                    </div>
+                    <h1
+                        id="articleHeadline"
+                        class="text-2xl sm:text-3xl font-bold text-white tracking-tight leading-snug break-keep"
+                    ></h1>
+                </section>
+
+                <!-- Core Facts: Summary & Impact Cards -->
+                <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Summary Card (핵심) -->
+                    <div id="summaryCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col justify-between gap-3">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2.5">
+                                <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                                <span class="text-xs font-bold text-sky-400 tracking-wider uppercase">핵심 사실</span>
+                            </div>
+                            <p
+                                id="articleSummary"
+                                class="text-sm sm:text-[15px] leading-relaxed text-slate-200 break-keep"
+                            ></p>
+                        </div>
+                    </div>
+
+                    <!-- Impact Card (파급) -->
+                    <div id="impactCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col justify-between gap-3">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2.5">
+                                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                                <span class="text-xs font-bold text-amber-400 tracking-wider uppercase">파급 효과</span>
+                            </div>
+                            <p
+                                id="articleImpact"
+                                class="text-sm sm:text-[15px] leading-relaxed text-slate-200 break-keep"
+                            ></p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Deep-Dive Section (Category-Specific Analytical Lens) -->
+                <section
+                    id="deepDiveSection"
+                    class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-sm space-y-6"
+                >
+                    <div class="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-slate-800/80">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+                                <i class="ph-bold ph-sparkle text-base"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-base sm:text-lg font-bold text-white">분야별 심층 분석</h2>
+                                <p class="text-xs text-slate-400">단순 사실을 넘어 행간과 구조적 파급을 해부합니다.</p>
+                            </div>
+                        </div>
+
+                        <!-- Analytical Lens Badge -->
+                        <div id="lensBadgeContainer">
+                            <span
+                                id="lensTitleBadge"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-sky-500/10 text-sky-300 border border-sky-500/20"
+                            >
+                                <i class="ph-bold ph-crosshair text-xs"></i>
+                                <span id="lensTitleText">심층 렌즈</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Deep Dive Sections Container -->
+                    <div id="deepDiveSectionsContainer" class="space-y-4">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </section>
+
+                <!-- Legacy Fallback Notice (Only shown if deepDive is missing) -->
+                <div
+                    id="deepDiveFallbackNotice"
+                    class="hidden bg-slate-900/60 border border-slate-800/70 rounded-2xl p-5 text-center text-xs text-slate-400"
+                >
+                    <i class="ph-bold ph-info text-sky-400 mr-1.5"></i>
+                    해당 회차는 기본 핵심·파급 요약 브리핑으로 제공됩니다.
+                </div>
+
+                <!-- Related Source Articles (Always Visible, Fully Expanded List) -->
+                <section
+                    id="relatedArticlesSection"
+                    class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-sm space-y-4"
+                >
+                    <div class="flex items-center justify-between pb-3.5 border-b border-slate-800/80">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 shrink-0">
+                                <i class="ph-bold ph-newspaper text-base"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-base sm:text-lg font-bold text-white">언론사별 관련 보도</h2>
+                                <p class="text-xs text-slate-400">다양한 언론사의 보도 원문을 직접 확인하실 수 있습니다.</p>
+                            </div>
+                        </div>
+                        <span
+                            id="articlesCountBadge"
+                            class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700/60"
+                        >
+                            총 0건
+                        </span>
+                    </div>
+
+                    <!-- Non-collapsible expanded source links list -->
+                    <ul id="relatedLinksList" class="space-y-2.5">
+                        <!-- Rendered dynamically -->
+                    </ul>
+                </section>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="mt-16 border-t border-slate-800 bg-slate-900 py-6 text-center text-xs text-slate-500">
+            <p>본 브리핑은 AI 및 자동화 프로그램을 통해 수집·요약된 내용으로 일부 부정확한 정보가 포함될 수 있습니다.</p>
+            <p class="mt-1 text-slate-600">정확한 사실 확인은 각 카드의 원문 기사를 참고하시기 바랍니다.</p>
+        </footer>
+
+        <!-- Detail Page Controller Script -->
+        <script>
+            // Card Badge Themes (Aligned with index.html)
+            const BADGE_THEMES = {
+                blue: "bg-blue-950/60 text-blue-300 border-blue-800",
+                emerald: "bg-emerald-950/60 text-emerald-300 border-emerald-800",
+                indigo: "bg-indigo-950/60 text-indigo-300 border-indigo-800",
+                violet: "bg-violet-950/60 text-violet-300 border-violet-800",
+                orange: "bg-orange-950/60 text-orange-300 border-orange-800",
+                cyan: "bg-cyan-950/60 text-cyan-300 border-cyan-800",
+                teal: "bg-teal-950/60 text-teal-300 border-teal-800",
+                pink: "bg-pink-950/60 text-pink-300 border-pink-800",
+                rose: "bg-rose-950/60 text-rose-300 border-rose-800",
+                amber: "bg-amber-950/60 text-amber-300 border-amber-800",
+            };
+
+            // Embedded Categories Fallback
+            let CATEGORY_DEFINITIONS = [
+                { id: 1, name: "정치", badgeColor: "blue", aliases: ["정치·사법"] },
+                { id: 2, name: "경제·금융", badgeColor: "emerald", aliases: ["경제", "금융"] },
+                { id: 3, name: "산업·기업", badgeColor: "indigo", aliases: ["산업", "기업"] },
+                { id: 4, name: "사회", badgeColor: "violet", aliases: ["사회·사건"] },
+                { id: 5, name: "국제·글로벌", badgeColor: "orange", aliases: ["국제", "글로벌"] },
+                { id: 6, name: "AI·빅테크", badgeColor: "cyan", aliases: ["AI", "인공지능", "빅테크"] },
+                { id: 7, name: "IT·통신", badgeColor: "teal", aliases: ["IT", "통신", "모바일"] },
+                { id: 8, name: "문화·콘텐츠", badgeColor: "pink", aliases: ["문화", "콘텐츠", "연예"] },
+                { id: 9, name: "스포츠", badgeColor: "rose", aliases: ["체육"] },
+                { id: 10, name: "라이프스타일", badgeColor: "amber", aliases: ["생활", "건강", "라이프"] },
+            ];
+
+            // Helper: Cache-busting fetch
+            async function fetchWithCacheBust(url) {
+                const sep = url.includes("?") ? "&" : "?";
+                const response = await fetch(`${url}${sep}_t=${Date.now()}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} fetching ${url}`);
+                }
+                return await response.json();
+            }
+
+            // Category Definition Matcher
+            function getCategoryDef(item) {
+                if (item && item.categoryId != null) {
+                    const match = CATEGORY_DEFINITIONS.find((c) => c.id === Number(item.categoryId));
+                    if (match) return match;
+                }
+                if (item && item.category) {
+                    const match = CATEGORY_DEFINITIONS.find(
+                        (c) => c.name === item.category || (c.aliases && c.aliases.includes(item.category)),
+                    );
+                    if (match) return match;
+                }
+                return { id: 1, name: (item && item.category) || "주요", badgeColor: "blue" };
+            }
+
+            // Outlet name extraction helper
+            function getOutletName(link) {
+                if (!link) return "언론사";
+                if (link.outlet) return link.outlet;
+                if (link.press) return link.press;
+                if (link.title) {
+                    const match = link.title.match(/^\[([^\]]+)\]/);
+                    if (match) return match[1];
+                }
+                if (link.url) {
+                    try {
+                        const parsed = new URL(link.url);
+                        const host = parsed.hostname;
+                        if (host.includes("yna.co.kr")) return "연합뉴스";
+                        if (host.includes("donga.com")) return "동아일보";
+                        if (host.includes("chosun.com")) return "조선일보";
+                        if (host.includes("hani.co.kr")) return "한겨레";
+                        if (host.includes("khan.co.kr")) return "경향신문";
+                        if (host.includes("bloter.net")) return "블로터";
+                        if (host.includes("hankyung.com")) return "한국경제";
+                        if (host.includes("mk.co.kr")) return "매일경제";
+                        if (host.includes("sedaily.com")) return "서울경제";
+                        if (host.includes("etnews.com")) return "전자신문";
+                        if (host.includes("zdnet.co.kr")) return "ZDNet Korea";
+                        if (host.includes("news1.kr")) return "뉴스1";
+                        if (host.includes("newsis.com")) return "뉴시스";
+                        if (host.includes("kbs.co.kr")) return "KBS";
+                        if (host.includes("mbc.co.kr") || host.includes("imnews.imbc.com")) return "MBC";
+                        if (host.includes("sbs.co.kr")) return "SBS";
+                        if (host.includes("ytn.co.kr")) return "YTN";
+                        if (host.includes("jtbc.co.kr")) return "JTBC";
+                        return host.replace(/^www\./, "");
+                    } catch {
+                        // ignore url parse error
+                    }
+                }
+                return "언론사 보도";
+            }
+
+            function escapeHtml(text) {
+                if (!text) return "";
+                return String(text)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            function formatDateTime(dateVal) {
+                let d = null;
+                if (dateVal) d = new Date(dateVal);
+                if (!d || isNaN(d.getTime())) d = new Date();
+
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, "0");
+                const day = String(d.getDate()).padStart(2, "0");
+                const hours = String(d.getHours()).padStart(2, "0");
+                const minutes = String(d.getMinutes()).padStart(2, "0");
+
+                return `${year}년 ${month}월 ${day}일 ${hours}시 ${minutes}분 발행`;
+            }
+
+            async function loadDetail() {
+                const loadingState = document.getElementById("loadingState");
+                const errorState = document.getElementById("errorState");
+                const detailContent = document.getElementById("detailContent");
+                const backToMainLink = document.getElementById("backToMainLink");
+                const errorBackBtn = document.getElementById("errorBackBtn");
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const idParam = urlParams.get("id");
+                const archiveParam = urlParams.get("archive");
+                const dateParam = urlParams.get("date");
+
+                // Update Back Button URL preserving archive / date params
+                let backUrl = "index.html";
+                if (archiveParam) {
+                    backUrl = `index.html?archive=${encodeURIComponent(archiveParam)}`;
+                } else if (dateParam) {
+                    backUrl = `index.html?date=${encodeURIComponent(dateParam)}`;
+                }
+                if (backToMainLink) backToMainLink.href = backUrl;
+                if (errorBackBtn) errorBackBtn.href = backUrl;
+
+                if (!idParam) {
+                    if (loadingState) loadingState.classList.add("hidden");
+                    if (errorState) errorState.classList.remove("hidden");
+                    const errMsg = document.getElementById("errorMessage");
+                    if (errMsg) errMsg.textContent = "기사 ID가 지정되지 않았습니다.";
+                    return;
+                }
+
+                try {
+                    // 1. Categories
+                    try {
+                        const catData = await fetchWithCacheBust("data/categories.json");
+                        if (Array.isArray(catData.categories) && catData.categories.length > 0) {
+                            CATEGORY_DEFINITIONS = catData.categories;
+                        }
+                    } catch (e) {
+                        console.warn("Using embedded categories fallback:", e);
+                    }
+
+                    // 2. Determine target data URL
+                    let targetUrl = "data/latest.json";
+                    if (archiveParam) {
+                        const clean = archiveParam.endsWith(".json") ? archiveParam : `${archiveParam}.json`;
+                        targetUrl = `data/archive/${clean}`;
+                    } else if (dateParam) {
+                        const clean = dateParam.endsWith(".json") ? dateParam : `${dateParam}.json`;
+                        targetUrl = `data/archive/${clean}`;
+                    }
+
+                    const data = await fetchWithCacheBust(targetUrl);
+
+                    // 3. Find matching article across topHeadlines and articles
+                    const allItems = [
+                        ...(Array.isArray(data.topHeadlines) ? data.topHeadlines : []),
+                        ...(Array.isArray(data.articles) ? data.articles : []),
+                    ];
+
+                    const item = allItems.find((it) => String(it.id) === String(idParam));
+
+                    if (!item) {
+                        throw new Error(`기사 ID [${idParam}]를 찾을 수 없습니다.`);
+                    }
+
+                    // 4. Render Article Header & Badge
+                    const catDef = getCategoryDef(item);
+                    const badgeClass = BADGE_THEMES[catDef.badgeColor] || BADGE_THEMES.blue;
+                    const catBadge = document.getElementById("categoryBadge");
+                    if (catBadge) {
+                        catBadge.className = `inline-flex items-center justify-center h-[30px] px-3 rounded-lg text-xs font-semibold border ${badgeClass} shrink-0`;
+                        catBadge.textContent = catDef.name;
+                    }
+
+                    const briefingDateStr = data.briefingDate || data.briefing_date || null;
+                    const formattedDate = formatDateTime(briefingDateStr);
+                    const briefingDateEl = document.getElementById("briefingDate");
+                    const headlineDateEl = document.getElementById("headlineDate");
+                    if (briefingDateEl) briefingDateEl.textContent = formattedDate;
+                    if (headlineDateEl) headlineDateEl.textContent = formattedDate;
+
+                    // 5. Headline
+                    const headlineEl = document.getElementById("articleHeadline");
+                    if (headlineEl) headlineEl.textContent = item.headline || "제목 없음";
+                    document.title = `${item.headline || "뉴스"} - 심층 분석`;
+
+                    // 6. Summary & Impact
+                    const summaryEl = document.getElementById("articleSummary");
+                    const impactEl = document.getElementById("articleImpact");
+                    if (summaryEl) summaryEl.textContent = item.summary || "요약 내용이 없습니다.";
+                    if (impactEl) impactEl.textContent = item.impact || "파급 효과 내용이 없습니다.";
+
+                    // 7. Deep-Dive Section (with graceful legacy fallback)
+                    const deepDiveSection = document.getElementById("deepDiveSection");
+                    const lensTitleText = document.getElementById("lensTitleText");
+                    const deepDiveContainer = document.getElementById("deepDiveSectionsContainer");
+                    const fallbackNotice = document.getElementById("deepDiveFallbackNotice");
+
+                    const hasDeepDive =
+                        item.deepDive &&
+                        Array.isArray(item.deepDive.sections) &&
+                        item.deepDive.sections.length > 0;
+
+                    if (hasDeepDive) {
+                        if (deepDiveSection) deepDiveSection.classList.remove("hidden");
+                        if (fallbackNotice) fallbackNotice.classList.add("hidden");
+
+                        if (lensTitleText) {
+                            lensTitleText.textContent = item.deepDive.lensTitle || `${catDef.name} 심층 렌즈`;
+                        }
+
+                        if (deepDiveContainer) {
+                            deepDiveContainer.innerHTML = item.deepDive.sections
+                                .map((sec, idx) => `
+                                    <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 sm:p-5 space-y-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-5 h-5 rounded-md bg-sky-500/20 text-sky-400 font-bold flex items-center justify-center text-xs shrink-0">${idx + 1}</span>
+                                            <h3 class="text-sm sm:text-base font-bold text-sky-300">${escapeHtml(sec.label)}</h3>
+                                        </div>
+                                        <p class="text-xs sm:text-sm text-slate-300 leading-relaxed pl-7 break-keep">${escapeHtml(sec.content)}</p>
+                                    </div>
+                                `)
+                                .join("");
+                        }
+                    } else {
+                        // Graceful fallback for legacy archives without deepDive
+                        if (deepDiveSection) deepDiveSection.classList.add("hidden");
+                        if (fallbackNotice) fallbackNotice.classList.remove("hidden");
+                    }
+
+                    // 8. Related Articles Section (Non-collapsible, always visible expanded list)
+                    const linksList = document.getElementById("relatedLinksList");
+                    const articlesCountBadge = document.getElementById("articlesCountBadge");
+                    const links = Array.isArray(item.links) ? item.links : [];
+
+                    if (articlesCountBadge) {
+                        articlesCountBadge.textContent = `총 ${links.length}건`;
+                    }
+
+                    if (linksList) {
+                        if (links.length > 0) {
+                            linksList.innerHTML = links
+                                .map((link) => {
+                                    const outlet = escapeHtml(getOutletName(link));
+                                    const title = escapeHtml(link.title || "원문 기사");
+                                    const url = escapeHtml(link.url || "#");
+                                    return `
+                                    <li class="bg-slate-950/60 border border-slate-800 hover:border-sky-500/60 rounded-xl p-4 transition group shadow-sm">
+                                        <a
+                                            href="${url}"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-200 hover:text-sky-300 transition"
+                                        >
+                                            <div class="flex items-center gap-2.5 min-w-0">
+                                                <span class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-800 text-sky-400 border border-slate-700/80 shrink-0">
+                                                    ${outlet}
+                                                </span>
+                                                <span class="truncate font-medium">${title}</span>
+                                            </div>
+                                            <i class="ph ph-arrow-square-out text-slate-400 group-hover:text-sky-400 shrink-0 text-base"></i>
+                                        </a>
+                                    </li>
+                                `;
+                                })
+                                .join("");
+                        } else {
+                            linksList.innerHTML = `
+                                <li class="text-xs text-slate-500 italic py-4 text-center bg-slate-950/40 rounded-xl border border-slate-800/60">
+                                    등록된 관련 원문 기사가 없습니다.
+                                </li>
+                            `;
+                        }
+                    }
+
+                    // Show content
+                    if (loadingState) loadingState.classList.add("hidden");
+                    if (detailContent) detailContent.classList.remove("hidden");
+                } catch (err) {
+                    console.error("Failed to load article detail:", err);
+                    if (loadingState) loadingState.classList.add("hidden");
+                    if (errorState) errorState.classList.remove("hidden");
+                    const errDetail = document.getElementById("errorDetail");
+                    if (errDetail) errDetail.textContent = err.message;
+                }
+            }
+
+            window.addEventListener("DOMContentLoaded", loadDetail);
+        </script>
+    </body>
+</html>

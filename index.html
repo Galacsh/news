@@ -364,60 +364,51 @@
             function buildCardHTML(item) {
                 const catDef = getCategoryDef(item);
                 const badgeClass = BADGE_THEMES[catDef.badgeColor] || BADGE_THEMES.blue;
-                const linksCount = item.links ? item.links.length : 0;
 
-                const linksListHTML =
-                    item.links && item.links.length > 0
-                        ? item.links
-                              .map(
-                                  (link) => `
-            <li class="bg-slate-900 border border-slate-800 rounded-lg p-3 hover:border-sky-500 transition group shadow-sm">
-              <a
-                href="${link.url}"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="flex items-center justify-between text-xs text-slate-300 hover:text-sky-400"
-              >
-                <span class="truncate pr-2 font-medium">${link.title}</span>
-                <i class="ph ph-arrow-square-out text-slate-400 group-hover:text-sky-500 shrink-0 text-sm"></i>
-              </a>
-            </li>
-          `,
-                              )
-                              .join("")
-                        : `<li class="text-xs text-slate-400 py-6 text-center">관련 기사가 없습니다.</li>`;
+                const urlParams = new URLSearchParams(window.location.search);
+                const archiveParam = urlParams.get("archive");
+                const dateParam = urlParams.get("date");
+
+                let detailUrl = `detail.html?id=${encodeURIComponent(item.id)}`;
+                if (archiveParam) {
+                    detailUrl += `&archive=${encodeURIComponent(archiveParam)}`;
+                } else if (dateParam) {
+                    detailUrl += `&date=${encodeURIComponent(dateParam)}`;
+                }
 
                 return `
-        <article class="flex flex-col bg-slate-900 border border-slate-800 rounded-2xl shadow-sm hover:border-slate-700 transition duration-150 overflow-hidden h-[330px]">
+        <article
+          onclick="location.href='${detailUrl}'"
+          class="flex flex-col bg-slate-900 border border-slate-800 rounded-2xl shadow-sm hover:border-sky-500/60 hover:shadow-lg hover:shadow-sky-500/10 transition-all duration-200 overflow-hidden h-[330px] group cursor-pointer"
+        >
           <div class="p-5 flex-1 flex flex-col min-h-0">
 
-            <!-- Row 1: Left Tag & Right Button -->
+            <!-- Row 1: Left Tag & Right Action Link -->
             <div class="flex items-center justify-between gap-2 mb-2.5 shrink-0">
               <span class="inline-flex items-center justify-center h-[30px] px-3 rounded-lg text-xs font-semibold border ${badgeClass} shrink-0">
                 ${catDef.name}
               </span>
 
-              <button
-                type="button"
-                onclick="toggleCardView('${item.id}')"
-                id="btn-${item.id}"
-                class="inline-flex items-center justify-center gap-1.5 h-[30px] px-3 text-xs font-semibold text-sky-400 hover:text-sky-300 bg-sky-950/60 hover:bg-sky-900/60 rounded-lg border border-sky-800 transition shrink-0 cursor-pointer"
-                title="관련 기사 / 요약 전환"
+              <a
+                href="${detailUrl}"
+                onclick="event.stopPropagation()"
+                class="inline-flex items-center justify-center gap-1.5 h-[30px] px-3 text-xs font-semibold text-sky-400 group-hover:text-sky-300 bg-sky-950/60 group-hover:bg-sky-900/60 rounded-lg border border-sky-800/80 transition shrink-0"
+                title="상세 분석 보기"
               >
-                <span id="label-${item.id}">관련 기사 (${linksCount})</span>
-                <i id="icon-${item.id}" class="ph-bold ph-caret-down text-xs"></i>
-              </button>
+                <span>자세히 보기</span>
+                <i class="ph-bold ph-arrow-right text-xs transition-transform group-hover:translate-x-0.5"></i>
+              </a>
             </div>
 
             <!-- Row 2: Headline -->
-            <h3 class="text-[15px] sm:text-base font-bold text-white leading-snug mb-3 line-clamp-2 shrink-0" title="${item.headline}">
-              ${item.headline}
+            <h3 class="text-[15px] sm:text-base font-bold text-white group-hover:text-sky-300 transition-colors leading-snug mb-3 line-clamp-2 shrink-0" title="${item.headline}">
+              <a href="${detailUrl}" onclick="event.stopPropagation()" class="hover:underline">
+                ${item.headline}
+              </a>
             </h3>
 
-            <!-- Row 3: Card Body -->
+            <!-- Row 3: Card Body (Summary & Impact) -->
             <div class="flex-1 relative overflow-hidden min-h-0">
-
-              <!-- View A: Summary & Impact -->
               <div id="summary-view-${item.id}" class="h-full custom-scroll overflow-y-auto space-y-3.5 text-xs sm:text-sm text-slate-300 bg-slate-800/50 p-4 rounded-xl border border-slate-800/70">
                 <div>
                   <span class="block text-xs font-bold text-sky-400 mb-1 tracking-wide">핵심</span>
@@ -428,53 +419,11 @@
                   <p class="leading-relaxed text-slate-200">${item.impact || ""}</p>
                 </div>
               </div>
-
-              <!-- View B: Scrollable Related Articles List -->
-              <div id="articles-view-${item.id}" class="hidden h-full custom-scroll overflow-y-auto pr-1">
-                <div class="p-0.5">
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">언론사별 관련 보도</span>
-                    <span class="text-[11px] text-slate-400">총 ${linksCount}건</span>
-                  </div>
-                  <ul class="space-y-2">
-                    ${linksListHTML}
-                  </ul>
-                </div>
-              </div>
-
             </div>
+
           </div>
         </article>
       `;
-            }
-
-            // 3. Toggle View Action
-            function toggleCardView(id) {
-                const summaryView = document.getElementById(
-                    `summary-view-${id}`,
-                );
-                const articlesView = document.getElementById(
-                    `articles-view-${id}`,
-                );
-                const icon = document.getElementById(`icon-${id}`);
-                const label = document.getElementById(`label-${id}`);
-
-                if (!summaryView || !articlesView) return;
-
-                const isShowingArticles =
-                    !articlesView.classList.contains("hidden");
-
-                if (isShowingArticles) {
-                    articlesView.classList.add("hidden");
-                    summaryView.classList.remove("hidden");
-                    icon.className = "ph-bold ph-caret-down text-xs";
-                    label.innerText = "관련 기사";
-                } else {
-                    summaryView.classList.add("hidden");
-                    articlesView.classList.remove("hidden");
-                    icon.className = "ph-bold ph-caret-up text-xs";
-                    label.innerText = "요약 보기";
-                }
             }
 
             // 4. Render Top 3 Section

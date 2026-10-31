@@ -643,21 +643,38 @@
                         const totalArticles = run.totalArticles || (run.topHeadlines ? run.topHeadlines.length : 0);
                         const headlines = Array.isArray(run.topHeadlines) ? run.topHeadlines : [];
 
+                        const encodedFilename = encodeURIComponent(run.filename);
+
                         const headlinesListHTML = headlines.length > 0
                             ? headlines
                                   .slice(0, 3)
                                   .map((h, i) => {
                                       const title = typeof h === "string" ? h : (h.headline || h.title || "주요 기사");
+                                      const itemId = (typeof h === "object" && h && h.id != null) ? h.id : (i + 1);
+                                      const detailUrl = `detail.html?id=${encodeURIComponent(itemId)}&archive=${encodedFilename}`;
                                       return `
-                                      <li class="flex items-start gap-2 text-xs text-slate-300">
-                                          <span class="w-4 h-4 rounded-full bg-slate-800 text-sky-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">${i + 1}</span>
-                                          <span class="truncate font-medium">${escapeHtml(title)}</span>
+                                      <li class="flex items-start justify-between gap-2 text-xs text-slate-300 group/item">
+                                          <div class="flex items-start gap-2 min-w-0">
+                                              <span class="w-4 h-4 rounded-full bg-slate-800 text-sky-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">${i + 1}</span>
+                                              <a
+                                                  href="${detailUrl}"
+                                                  class="truncate font-medium text-slate-300 hover:text-sky-400 hover:underline transition"
+                                                  title="${escapeHtml(title)}"
+                                              >
+                                                  ${escapeHtml(title)}
+                                              </a>
+                                          </div>
+                                          <a
+                                              href="${detailUrl}"
+                                              class="text-slate-500 hover:text-sky-400 shrink-0 transition"
+                                              title="상세 분석 보기"
+                                          >
+                                              <i class="ph-bold ph-arrow-right text-[11px]"></i>
+                                          </a>
                                       </li>`;
                                   })
                                   .join("")
                             : `<li class="text-xs text-slate-500 italic">헤드라인 요약 정보가 없습니다.</li>`;
-
-                        const encodedFilename = encodeURIComponent(run.filename);
 
                         return `
                         <article class="briefing-run-card bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition duration-150 shadow-sm flex flex-col justify-between gap-4 group">
