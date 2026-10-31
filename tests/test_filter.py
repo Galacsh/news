@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import io
 import json
 import urllib.error
@@ -17,6 +18,7 @@ from src.ingest.filter import (
     ArticleFilterPipeline,
     apply_adaptive_lookback,
     are_articles_same_topic,
+    calculate_jaccard_similarity,
     cluster_articles_by_topic,
     deduplicate_articles,
     extract_topic_keywords,
@@ -1506,20 +1508,20 @@ def test_format_related_title():
 
 
 def test_clustering_criteria_conditions():
-    """Verify that any of the 4 clustering matching criteria connects two articles into a topic cluster."""
-    # 1) Common keywords >= 2: e.g. {'최불암', '별세'}
+    """Verify that any of the reformed clustering matching criteria connects two articles into a topic cluster."""
+    # 1) Rule 1 (Jaccard similarity >= 0.35 with common keywords >= 2)
     art_a = Article(
         id="c1-a",
-        title="국민배우 최불암 오늘 별세 향년 85세",
-        summary="원로배우 최불암 선생이 별세했다.",
+        title="바이낸스 해킹 사태로 코인 유출",
+        summary="가상화폐 거래소 바이낸스에서 해킹이 발생했다.",
         url="http://news.com/c1a",
         outlet="언론A",
         published_at="2026-10-31T09:00:00+00:00",
     )
     art_b = Article(
         id="c1-b",
-        title="배우 최불암 별세 소식에 각계 애도 물결 이어져",
-        summary="최불암 별세 소식에 추모가 잇따르고 있다.",
+        title="바이낸스 해킹 의혹 코인 유출 피해",
+        summary="바이낸스 해킹으로 코인이 유출되었다.",
         url="http://news.com/c1b",
         outlet="언론B",
         published_at="2026-10-31T09:10:00+00:00",
@@ -1527,12 +1529,13 @@ def test_clustering_criteria_conditions():
     tok_a = extract_topic_keywords(art_a.title)
     tok_b = extract_topic_keywords(art_b.title)
     assert len(tok_a & tok_b) >= 2
+    assert calculate_jaccard_similarity(tok_a, tok_b) >= 0.35
     assert are_articles_same_topic(art_a, art_b, tok_a, tok_b) is True
 
-    # 2) Title token Jaccard similarity >= 0.20
+    # 2) Rule 2 (Overlap ratio >= 0.40 with min_len >= 3 and len(common) >= 2)
     art_c = Article(
         id="c2-a",
-        title="글로벌 암호화폐 거래소 바이낸스 해킹 사태 발생",
+        title="한국은행 기준금리 인하",
         summary="",
         url="http://news.com/c2a",
         outlet="언론A",
@@ -1540,7 +1543,7 @@ def test_clustering_criteria_conditions():
     )
     art_d = Article(
         id="c2-b",
-        title="바이낸스 해킹 의혹... 1조원대 코인 유출",
+        title="금융위원회 물가 안정 대책 회의 개최 및 한국은행 기준금리 파급 효과 분석",
         summary="",
         url="http://news.com/c2b",
         outlet="언론B",
@@ -1548,12 +1551,18 @@ def test_clustering_criteria_conditions():
     )
     tok_c = extract_topic_keywords(art_c.title)
     tok_d = extract_topic_keywords(art_d.title)
+    common_cd = tok_c & tok_d
+    min_len_cd = min(len(tok_c), len(tok_d))
+    assert len(common_cd) >= 2
+    assert min_len_cd >= 3
+    assert (len(common_cd) / min_len_cd) >= 0.40
+    assert calculate_jaccard_similarity(tok_c, tok_d) < 0.35
     assert are_articles_same_topic(art_c, art_d, tok_c, tok_d) is True
 
-    # 3) Overlap ratio >= 0.30 with min len >= 1
+    # 3) Rule 3 (SequenceMatcher string similarity >= 0.60 with len(common) >= 2)
     art_e = Article(
         id="c3-a",
-        title="기준금리 동결",
+        title="현대차 신형 전기차 부품 수출 확대 논의",
         summary="",
         url="http://news.com/c3a",
         outlet="언론A",
@@ -1561,7 +1570,7 @@ def test_clustering_criteria_conditions():
     )
     art_f = Article(
         id="c3-b",
-        title="한국은행 금융통화위원회 기준금리 연 3.5% 만장일치 동결",
+        title="현대자동차 신형 전기차 배터리 공급 협력 합의",
         summary="",
         url="http://news.com/c3b",
         outlet="언론B",
@@ -1569,28 +1578,13 @@ def test_clustering_criteria_conditions():
     )
     tok_e = extract_topic_keywords(art_e.title)
     tok_f = extract_topic_keywords(art_f.title)
+    common_ef = tok_e & tok_f
+    min_len_ef = min(len(tok_e), len(tok_f))
+    assert len(common_ef) >= 2
+    assert (len(common_ef) / min_len_ef) < 0.40
+    assert calculate_jaccard_similarity(tok_e, tok_f) < 0.35
+    assert difflib.SequenceMatcher(None, normalize_title(art_e.title), normalize_title(art_f.title)).ratio() >= 0.60
     assert are_articles_same_topic(art_e, art_f, tok_e, tok_f) is True
-
-    # 4) SequenceMatcher string similarity >= 0.70
-    art_g = Article(
-        id="c4-a",
-        title="정부 유류세 한시 인하 2개월 추가 연장 발표",
-        summary="",
-        url="http://news.com/c4a",
-        outlet="언론A",
-        published_at="2026-10-31T12:00:00+00:00",
-    )
-    art_h = Article(
-        id="c4-b",
-        title="정부 유류세 한시 인하 2개월 추가 연장 결정",
-        summary="",
-        url="http://news.com/c4b",
-        outlet="언론B",
-        published_at="2026-10-31T12:05:00+00:00",
-    )
-    tok_g = extract_topic_keywords(art_g.title)
-    tok_h = extract_topic_keywords(art_h.title)
-    assert are_articles_same_topic(art_g, art_h, tok_g, tok_h) is True
 
     # Unrelated articles should not match
     art_unrelated = Article(
@@ -1603,6 +1597,109 @@ def test_clustering_criteria_conditions():
     )
     tok_unrel = extract_topic_keywords(art_unrelated.title)
     assert are_articles_same_topic(art_a, art_unrelated, tok_a, tok_unrel) is False
+
+
+def test_are_articles_same_topic_single_token_overlap_rejected():
+    """Verify single-token overlap is strictly rejected to prevent chain-reaction percolation."""
+    art_1 = Article(
+        id="single-tok-1",
+        title="대통령 취임식 참석 인사 명단 공개",
+        summary="",
+        url="http://news.com/st1",
+        outlet="언론A",
+        published_at="2026-10-31T09:00:00+00:00",
+        category="정치",
+    )
+    art_2 = Article(
+        id="single-tok-2",
+        title="대통령 주재 수석비서관 회의 주재",
+        summary="",
+        url="http://news.com/st2",
+        outlet="언론B",
+        published_at="2026-10-31T09:05:00+00:00",
+        category="정치",
+    )
+    tok_1 = extract_topic_keywords(art_1.title)
+    tok_2 = extract_topic_keywords(art_2.title)
+    assert len(tok_1 & tok_2) == 1
+    assert are_articles_same_topic(art_1, art_2, tok_1, tok_2) is False
+
+
+def test_are_articles_same_topic_and_clustering_category_isolation():
+    """Verify articles from different categories are rejected even with identical titles."""
+    art_pol = Article(
+        id="cat-pol",
+        title="정부 대규모 첨단 반도체 지원 방안 발표",
+        summary="정부가 대규모 반도체 투자 지원책을 발표했다.",
+        url="http://news.com/cat-pol",
+        outlet="언론A",
+        published_at="2026-10-31T09:00:00+00:00",
+        category="정치",
+    )
+    art_eco = Article(
+        id="cat-eco",
+        title="정부 대규모 첨단 반도체 지원 방안 발표",
+        summary="정부가 대규모 반도체 투자 지원책을 발표했다.",
+        url="http://news.com/cat-eco",
+        outlet="언론B",
+        published_at="2026-10-31T09:05:00+00:00",
+        category="경제·금융",
+    )
+    tok_pol = extract_topic_keywords(art_pol.title)
+    tok_eco = extract_topic_keywords(art_eco.title)
+    assert tok_pol == tok_eco
+    # are_articles_same_topic must reject immediately due to category mismatch
+    assert are_articles_same_topic(art_pol, art_eco, tok_pol, tok_eco) is False
+
+    # cluster_articles_by_topic must isolate them into two separate clusters
+    clusters = cluster_articles_by_topic([art_pol, art_eco])
+    assert len(clusters) == 2
+    cluster_ids = {c.id for c in clusters}
+    assert cluster_ids == {"cat-pol", "cat-eco"}
+
+
+def test_cluster_articles_by_topic_related_links_cap_and_distinct_outlets():
+    """Verify rep.related_links never exceeds 4 items and preserves distinct media outlets."""
+    ref_time = datetime(2026, 10, 31, 12, 0, 0, tzinfo=timezone.utc)
+    # Create 7 articles from 7 distinct outlets covering the exact same breaking story
+    story_title = "한국은행 금융통화위원회 기준금리 연 3.25%로 0.25%p 전격 인하 발표"
+    articles = [
+        Article(
+            id=f"story-{i}",
+            title=story_title,
+            summary=f"한국은행 기준금리 인하 관련 보도 {i}",
+            url=f"https://outlet-{i}.com/news/{i}",
+            outlet=f"언론사{chr(65 + i)}",
+            published_at=(ref_time - timedelta(minutes=i * 5)).isoformat(),
+            category="경제·금융",
+        )
+        for i in range(7)
+    ]
+    # Also add an article from an already-present outlet to test outlet deduplication
+    duplicate_outlet_art = Article(
+        id="story-dup-outlet",
+        title=story_title,
+        summary="한국은행 기준금리 인하 관련 추가 속보",
+        url="https://outlet-0.com/news/dup",
+        outlet="언론사A",
+        published_at=(ref_time - timedelta(minutes=2)).isoformat(),
+        category="경제·금융",
+    )
+    all_articles = articles + [duplicate_outlet_art]
+
+    clustered = cluster_articles_by_topic(all_articles)
+    assert len(clustered) == 1
+    rep = clustered[0]
+
+    # rep.related_links must be strictly capped at 4
+    assert len(rep.related_links) <= 4
+    assert len(rep.related_links) == 4
+
+    # All related links must be from distinct outlets and distinct from rep's outlet
+    related_titles = [link["title"] for link in rep.related_links]
+    assert len(related_titles) == len(set(related_titles))
+    for link in rep.related_links:
+        assert rep.outlet not in link["title"]
 
 
 def test_cross_outlet_consensus_clustering_pipeline_end_to_end():

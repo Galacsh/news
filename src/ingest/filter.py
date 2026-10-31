@@ -361,29 +361,36 @@ def are_articles_same_topic(
     tokens_b: set[str],
     similarity_threshold: float = 0.20,
 ) -> bool:
-    """Check if two articles cover the same topic based on token overlap, Jaccard, overlap ratio, or string similarity."""
-    common_tokens = tokens_a & tokens_b
+    """Check if two articles cover the same topic with category isolation and multi-token consensus rules."""
+    # Category isolation: if both categories are defined and different, reject immediately
+    cat_a = getattr(art_a, "category", None) or ""
+    cat_b = getattr(art_b, "category", None) or ""
+    if cat_a and cat_b and cat_a != cat_b:
+        return False
 
-    # 1) Number of common keywords len(tokens_a & tokens_b) >= 2 (e.g. {'바이낸스', '해킹'} or {'최불암', '별세'})
-    if len(common_tokens) >= 2:
-        return True
+    # Common tokens
+    common = tokens_a & tokens_b
 
-    # 2) Title token Jaccard similarity >= 0.20
+    # Single-token rule: NEVER match on < 2 common tokens (prevents chain-reaction percolation)
+    if len(common) < 2:
+        return False
+
+    # Rule 1 (Jaccard): title token Jaccard similarity >= 0.35
     jaccard_sim = calculate_jaccard_similarity(tokens_a, tokens_b)
-    if jaccard_sim >= similarity_threshold:
+    if jaccard_sim >= 0.35:
         return True
 
-    # 3) Minimum overlap ratio len(tokens_a & tokens_b) / min(len(tokens_a), len(tokens_b)) >= 0.30 (with min len >= 1)
+    # Rule 2 (Overlap ratio): overlap ratio >= 0.40 with min_len >= 3 and len(common) >= 2
     min_len = min(len(tokens_a), len(tokens_b))
-    if min_len >= 1 and (len(common_tokens) / min_len) >= 0.30:
+    if min_len >= 3 and len(common) >= 2 and (len(common) / min_len) >= 0.40:
         return True
 
-    # 4) SequenceMatcher string similarity >= 0.70
+    # Rule 3 (SequenceMatcher): normalized title string similarity >= 0.60
     norm_a = normalize_title(art_a.title)
     norm_b = normalize_title(art_b.title)
     if norm_a and norm_b:
         seq_sim = difflib.SequenceMatcher(None, norm_a, norm_b).ratio()
-        if seq_sim >= 0.70:
+        if seq_sim >= 0.60:
             return True
 
     return False
@@ -448,7 +455,12 @@ def cluster_articles_by_topic(
             parent[root_j] = root_i
 
     for i in range(n):
+        cat_i = getattr(articles[i], "category", None) or ""
         for j in range(i + 1, n):
+            cat_j = getattr(articles[j], "category", None) or ""
+            # Category isolation: only compare pairs in identical category or where either is None/empty
+            if cat_i and cat_j and cat_i != cat_j:
+                continue
             if are_articles_same_topic(
                 articles[i],
                 articles[j],
@@ -494,13 +506,26 @@ def cluster_articles_by_topic(
             reverse=True,
         )
         seen_urls = {rep.url}
+        seen_outlets: set[str] = set()
+        rep_brand = _normalize_outlet_brand(rep.outlet)
+        if rep_brand:
+            seen_outlets.add(rep_brand)
+
         related_links: list[dict[str, str]] = []
         for other in sorted_others:
-            if other.url and other.url not in seen_urls:
-                seen_urls.add(other.url)
-                link_title = format_related_title(other.title, other.outlet)
-                related_links.append({"title": link_title, "url": other.url})
-        rep.related_links = related_links
+            if not other.url or other.url in seen_urls:
+                continue
+            other_brand = _normalize_outlet_brand(other.outlet)
+            if other_brand and other_brand in seen_outlets:
+                continue
+            if other_brand:
+                seen_outlets.add(other_brand)
+            seen_urls.add(other.url)
+            link_title = format_related_title(other.title, other.outlet)
+            related_links.append({"title": link_title, "url": other.url})
+            if len(related_links) >= 4:
+                break
+        rep.related_links = related_links[:4]
 
         outlets = {
             _normalize_outlet_brand(m.outlet)
