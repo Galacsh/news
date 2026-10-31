@@ -20,6 +20,7 @@ class DOMIdParser(html.parser.HTMLParser):
         self.links: list[dict[str, str]] = []
         self.scripts: list[str] = []
         self.meta_tags: list[dict[str, str]] = []
+        self.elements_by_id: dict[str, dict[str, str]] = {}
         self._current_tag: str | None = None
         self._current_script_buffer: list[str] = []
 
@@ -30,6 +31,7 @@ class DOMIdParser(html.parser.HTMLParser):
 
         if "id" in attr_dict:
             self.ids.add(attr_dict["id"])
+            self.elements_by_id[attr_dict["id"]] = attr_dict
 
         if "class" in attr_dict:
             for cls_name in attr_dict["class"].split():
@@ -108,14 +110,26 @@ def test_header_and_navigation(parsed_dom: DOMIdParser, html_content: str):
     """Verify header title, timestamp display, status badge, index.html navigation, and refresh button."""
     assert "파이프라인 모니터링 & 수집 현황 대시보드" in html_content
 
+    # Header h1 contains break-keep
+    h1_match = re.search(r"<h1[^>]*class=['\"]([^'\"]*)['\"][^>]*>", html_content)
+    assert h1_match, "monitoring.html must contain an <h1> tag"
+    assert "break-keep" in h1_match.group(1).split(), "monitoring.html <h1> must contain break-keep class"
+
     # Essential Header DOM element IDs
     assert "telemetryTimestamp" in parsed_dom.ids
     assert "overallStatusBadge" in parsed_dom.ids
     assert "refreshBtn" in parsed_dom.ids
 
-    # Navigation back to index.html
-    has_index_link = any(link.get("href") == "index.html" for link in parsed_dom.links)
-    assert has_index_link, "Missing navigation link with href='index.html'"
+    # #overallStatusBadge contains whitespace-nowrap
+    badge_el = parsed_dom.elements_by_id.get("overallStatusBadge", {})
+    badge_classes = badge_el.get("class", "").split()
+    assert "whitespace-nowrap" in badge_classes, "#overallStatusBadge must contain whitespace-nowrap class"
+
+    # Navigation back to index.html with whitespace-nowrap
+    index_links = [link for link in parsed_dom.links if link.get("href") == "index.html"]
+    assert len(index_links) >= 1, "Missing navigation link with href='index.html'"
+    index_nav_classes = index_links[0].get("class", "").split()
+    assert "whitespace-nowrap" in index_nav_classes, "index.html navigation button must contain whitespace-nowrap class"
 
 
 def test_summary_metric_cards(parsed_dom: DOMIdParser):

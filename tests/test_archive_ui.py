@@ -22,6 +22,7 @@ class DOMIdParser(html.parser.HTMLParser):
         self.links: list[dict[str, str]] = []
         self.scripts: list[str] = []
         self.meta_tags: list[dict[str, str]] = []
+        self.elements_by_id: dict[str, dict[str, str]] = {}
         self._current_tag: str | None = None
         self._current_script_buffer: list[str] = []
 
@@ -32,6 +33,7 @@ class DOMIdParser(html.parser.HTMLParser):
 
         if "id" in attr_dict:
             self.ids.add(attr_dict["id"])
+            self.elements_by_id[attr_dict["id"]] = attr_dict
 
         if "class" in attr_dict:
             for cls_name in attr_dict["class"].split():
@@ -143,11 +145,19 @@ def test_archive_html_header_and_navigation(archive_dom: DOMIdParser, archive_ht
     """Verify header title, back link to index.html, refresh button, notices, and monitoring links."""
     assert "아카이브 탐색" in archive_html_content
 
-    # Back to index.html link
+    # Header h1 mobile responsive class break-keep
+    h1_match = re.search(r"<h1[^>]*class=['\"]([^'\"]*)['\"][^>]*>", archive_html_content)
+    assert h1_match, "archive.html must contain an <h1> tag"
+    assert "break-keep" in h1_match.group(1).split(), "archive.html <h1> must contain break-keep class"
+
+    # Back to index.html link with mobile responsive classes (whitespace-nowrap, shrink-0)
     assert "backToLatestLink" in archive_dom.ids
     back_links = [l for l in archive_dom.links if l.get("id") == "backToLatestLink"]
     assert len(back_links) == 1
     assert back_links[0].get("href") == "index.html"
+    back_link_classes = back_links[0].get("class", "").split()
+    assert "whitespace-nowrap" in back_link_classes, "#backToLatestLink must contain whitespace-nowrap"
+    assert "shrink-0" in back_link_classes, "#backToLatestLink must contain shrink-0"
 
     # Refresh button
     assert "refreshBtn" in archive_dom.ids
@@ -239,7 +249,7 @@ def test_index_html_fetch_latest_data_archive_support(index_html_content: str):
 
 
 def test_index_html_archive_banner(index_dom: DOMIdParser, index_html_content: str):
-    """Verify index.html contains archiveNoticeBanner with default hidden state and link to index.html."""
+    """Verify index.html contains archiveNoticeBanner with default hidden state and responsive link buttons."""
     assert "archiveNoticeBanner" in index_dom.ids
 
     # Banner default hidden
@@ -249,6 +259,30 @@ def test_index_html_archive_banner(index_dom: DOMIdParser, index_html_content: s
     # Link back to latest briefing (index.html)
     assert 'href="index.html"' in index_html_content
     assert "최신 브리핑 보기" in index_html_content
+
+    # Banner buttons have whitespace-nowrap
+    banner_match = re.search(r'id=["\']archiveNoticeBanner["\'][\s\S]*?</div>\s*</div>', index_html_content)
+    assert banner_match, "archiveNoticeBanner section not found"
+    banner_buttons = re.findall(r'<a\b[^>]*class=["\']([^"\']*)["\'][^>]*>', banner_match.group(0))
+    assert len(banner_buttons) >= 2, "archiveNoticeBanner must contain archive and latest buttons"
+    for btn_classes in banner_buttons:
+        assert "whitespace-nowrap" in btn_classes.split(), "Archive notice banner buttons must contain whitespace-nowrap"
+
+
+def test_index_html_mobile_responsive_header(index_dom: DOMIdParser, index_html_content: str):
+    """Verify index.html mobile responsive classes: h1 break-keep and action buttons shrink-0."""
+    # Header h1 contains break-keep
+    h1_match = re.search(r"<h1[^>]*class=['\"]([^'\"]*)['\"][^>]*>", index_html_content)
+    assert h1_match, "index.html must contain an <h1> tag"
+    assert "break-keep" in h1_match.group(1).split(), "index.html <h1> must contain break-keep class"
+
+    # Action buttons contain shrink-0
+    action_button_ids = ["archiveLink", "noticeLink", "refreshBtn"]
+    for btn_id in action_button_ids:
+        assert btn_id in index_dom.ids, f"Action button #{btn_id} must exist in index.html"
+        el = index_dom.elements_by_id.get(btn_id, {})
+        classes = el.get("class", "").split()
+        assert "shrink-0" in classes, f"Action button #{btn_id} must contain shrink-0 class"
 
 
 def test_intra_day_runs_simulation():
@@ -337,7 +371,16 @@ def test_detail_html_dom_structures(detail_dom: DOMIdParser, detail_html_content
     back_links = [l for l in detail_dom.links if l.get("id") == "backToMainLink"]
     assert len(back_links) == 1
     assert back_links[0].get("href") == "index.html"
+    back_link_classes = back_links[0].get("class", "").split()
+    assert "whitespace-nowrap" in back_link_classes, "#backToMainLink must contain whitespace-nowrap"
+    assert "shrink-0" in back_link_classes, "#backToMainLink must contain shrink-0"
+
     assert "categoryBadge" in detail_dom.ids
+    cat_badge = detail_dom.elements_by_id.get("categoryBadge", {})
+    cat_badge_classes = cat_badge.get("class", "").split()
+    assert "whitespace-nowrap" in cat_badge_classes, "#categoryBadge must contain whitespace-nowrap"
+    assert "shrink-0" in cat_badge_classes, "#categoryBadge must contain shrink-0"
+
     assert "briefingDate" in detail_dom.ids
 
     # Core content sections

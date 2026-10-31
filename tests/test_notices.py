@@ -170,6 +170,16 @@ def test_notices_html_header_back_link():
     )
     assert "← 뉴스 브리핑" in content, "Back link must have text '← 뉴스 브리핑'"
 
+    # Verify #backLink contains whitespace-nowrap and shrink-0
+    assert 'id="backLink"' in content, "notices.html header must have #backLink"
+    back_link_match = re.search(r'<a[^>]*id=["\']backLink["\'][^>]*>', content)
+    assert back_link_match, "notices.html must have #backLink <a> element"
+    class_match = re.search(r'class=["\']([^"\']+)["\']', back_link_match.group(0))
+    assert class_match, "#backLink must have class attribute"
+    classes = class_match.group(1).split()
+    assert "whitespace-nowrap" in classes, "#backLink must contain whitespace-nowrap"
+    assert "shrink-0" in classes, "#backLink must contain shrink-0"
+
 
 def test_notices_html_container_and_error_handling():
     content = Path("notices.html").read_text(encoding="utf-8")
