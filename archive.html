@@ -52,22 +52,22 @@
             <div
                 class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4"
             >
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 min-w-0">
                     <a
                         href="index.html"
                         id="backToLatestLink"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 hover:border-slate-600 transition duration-150"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 hover:border-slate-600 transition duration-150 shrink-0 whitespace-nowrap"
                         title="메인 뉴스 브리핑으로 돌아가기"
                     >
                         <i class="ph-bold ph-arrow-left"></i>
-                        <span>뉴스 브리핑</span>
+                        <span class="hidden sm:inline">뉴스 브리핑</span><span class="sm:hidden">메인</span>
                     </a>
-                    <span class="text-slate-600">|</span>
+                    <span class="text-slate-600 hidden sm:inline">|</span>
                     <h1
-                        class="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2"
+                        class="text-base sm:text-xl font-bold tracking-tight text-white flex items-center gap-2 min-w-0 break-keep"
                     >
-                        <i class="ph-bold ph-archive text-sky-400"></i>
-                        <span>뉴스 브리핑 아카이브 탐색</span>
+                        <i class="ph-bold ph-archive text-sky-400 shrink-0"></i>
+                        <span class="hidden sm:inline whitespace-nowrap">뉴스 브리핑 아카이브 탐색</span><span class="sm:hidden whitespace-nowrap">아카이브 탐색</span>
                     </h1>
                 </div>
 
@@ -166,12 +166,12 @@
                                 <span id="currentMonthLabel" class="font-semibold text-slate-200">2026년 10월</span>
                             </h3>
 
-                            <div class="flex items-center gap-1">
+                            <div class="flex items-center gap-1 shrink-0">
                                 <button
                                     type="button"
                                     id="todayJumpBtn"
                                     onclick="jumpToLatest()"
-                                    class="px-2 py-1 text-xs font-medium text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition mr-1"
+                                    class="px-2 py-1 text-xs font-medium text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition mr-1 shrink-0 whitespace-nowrap"
                                     title="최신 발행월로 이동"
                                 >
                                     최신
@@ -180,7 +180,7 @@
                                     type="button"
                                     id="prevMonthBtn"
                                     onclick="changeMonth(-1)"
-                                    class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 transition"
+                                    class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 transition shrink-0 whitespace-nowrap"
                                     title="이전 달"
                                     aria-label="이전 달"
                                 >
@@ -190,7 +190,7 @@
                                     type="button"
                                     id="nextMonthBtn"
                                     onclick="changeMonth(1)"
-                                    class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 transition"
+                                    class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 transition shrink-0 whitespace-nowrap"
                                     title="다음 달"
                                     aria-label="다음 달"
                                 >
@@ -252,7 +252,7 @@
                             type="button"
                             id="resetFilterBtn"
                             onclick="resetDateFilter()"
-                            class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 transition self-start sm:self-auto cursor-pointer"
+                            class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 transition self-start sm:self-auto cursor-pointer whitespace-nowrap shrink-0"
                             title="날짜 필터 해제하고 전체 보기"
                         >
                             <i class="ph-bold ph-arrow-counter-clockwise"></i>
@@ -658,7 +658,7 @@
                                               <span class="w-4 h-4 rounded-full bg-slate-800 text-sky-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">${i + 1}</span>
                                               <a
                                                   href="${detailUrl}"
-                                                  class="truncate font-medium text-slate-300 hover:text-sky-400 hover:underline transition"
+                                                  class="truncate font-medium text-slate-300 hover:text-sky-400 hover:underline transition break-keep"
                                                   title="${escapeHtml(title)}"
                                               >
                                                   ${escapeHtml(title)}
@@ -682,13 +682,13 @@
                                 <!-- Card Header: Date, Time Badge, Articles Count -->
                                 <div class="flex items-center justify-between gap-2 mb-3">
                                     <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20 whitespace-nowrap shrink-0">
                                             <i class="ph-bold ph-clock"></i>
                                             <span class="run-time">${escapeHtml(timeStr)}</span>
                                         </span>
                                         <span class="text-xs text-slate-400 font-mono font-medium">${run.date}</span>
                                     </div>
-                                    <span class="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60 font-medium">
+                                    <span class="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60 font-medium whitespace-nowrap shrink-0">
                                         <i class="ph-bold ph-newspaper"></i>
                                         <span class="run-articles-count">${totalArticles}개 기사</span>
                                     </span>
@@ -710,7 +710,7 @@
                                 </span>
                                 <a
                                     href="index.html?archive=${encodedFilename}"
-                                    class="run-link inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 active:scale-95 transition shadow-sm group-hover:shadow-sky-500/20 shrink-0"
+                                    class="run-link inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 active:scale-95 transition shadow-sm group-hover:shadow-sky-500/20 shrink-0 whitespace-nowrap"
                                     title="${run.date} (${timeStr}) 브리핑 열람"
                                 >
                                     <span>브리핑 보기</span>

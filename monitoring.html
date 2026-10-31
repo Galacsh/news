@@ -54,9 +54,7 @@
                         <span class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 border border-sky-500/30">
                             <i class="ph-bold ph-chart-line-up text-xl"></i>
                         </span>
-                        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                            파이프라인 모니터링 & 수집 현황 대시보드
-                        </h1>
+                        <h1 class="text-lg sm:text-2xl font-bold tracking-tight text-white break-keep">파이프라인 모니터링 & 수집 현황 대시보드</h1>
                     </div>
                     <div class="flex items-center gap-3 mt-2 flex-wrap text-xs sm:text-sm">
                         <span class="text-slate-400 font-medium flex items-center gap-1.5">
@@ -65,7 +63,7 @@
                         </span>
                         <span
                             id="overallStatusBadge"
-                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700 transition-colors"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700 transition-colors whitespace-nowrap shrink-0"
                         >
                             <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 상태 확인 중
                         </span>
@@ -76,11 +74,11 @@
                 <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
                     <a
                         href="index.html"
-                        class="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 rounded-xl transition duration-150 cursor-pointer shadow-sm shrink-0 whitespace-nowrap"
                         title="뉴스 브리핑 페이지로 이동"
                     >
                         <i class="ph-bold ph-newspaper text-base text-sky-400"></i>
-                        <span>뉴스 브리핑 홈</span>
+                        <span class="hidden sm:inline">뉴스 브리핑 홈</span><span class="sm:hidden">홈</span>
                     </a>
                     <button
                         type="button"
@@ -430,11 +428,11 @@
 
                     if (isHealthy) {
                         overallBadge.className =
-                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30";
+                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 whitespace-nowrap shrink-0";
                         overallBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 정상 가동 (Healthy)`;
                     } else {
                         overallBadge.className =
-                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30";
+                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 whitespace-nowrap shrink-0";
                         overallBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> 주의 / 오류 (Degraded)`;
                     }
                 }
