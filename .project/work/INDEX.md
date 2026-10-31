@@ -13,3 +13,4 @@
 | [SLICE-0009](SLICE-0009-daum-news-crawler.md) | Daum News scraper & major news extractor | completed | [REQ-0003](../requirements/REQ-0003-daum-news-crawler.md) | Closed |
 | [SLICE-0010](SLICE-0010-consensus-deep-dive-briefing.md) | Cross-outlet consensus, BS4 body extraction & category deep-dive briefing | completed | [REQ-0004](../requirements/REQ-0004-consensus-deep-dive-briefing.md) | Closed |
 | [SLICE-0011](SLICE-0011-multi-outlet-clustering-and-category-quota.md) | Rich multi-outlet consensus clustering & exact 3-article category quota | completed | [REQ-0005](../requirements/REQ-0005-multi-outlet-clustering-and-category-quota.md) | Closed |
+| [SLICE-0012](SLICE-0012-mobile-responsive-ui-polish.md) | Mobile header & non-content responsive UI polish | completed | [REQ-0006](../requirements/REQ-0006-mobile-responsive-ui-polish.md) | Closed |
