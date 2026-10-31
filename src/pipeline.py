@@ -15,12 +15,13 @@ import threading
 import time
 from typing import Any
 
+from src.ingest.body_extractor import enrich_articles_with_body
 from src.ingest.filter import ArticleFilterPipeline
 from src.ingest.models import Article, FeedSource
 from src.ingest.rss import RSSFeedParser
 from src.ingest.sources import DEFAULT_FEEDS_PATH, load_feed_sources
 from src.llm.client import GeminiClient
-from src.llm.summarizer import NewsSummarizer
+from src.llm.summarizer import NewsSummarizer, make_default_deep_dive
 
 logger = logging.getLogger(__name__)
 
@@ -446,14 +447,28 @@ class DailyBriefingPipeline:
                 client.generate_json = orig_generate
             self.gemini_latency_ms = round((time.perf_counter() - t0) * 1000, 2)
 
-        # Enforce sequential integer IDs (1..3 for top headlines, 4..N for articles)
+        # Enforce sequential integer IDs (1..3 for top headlines, 4..N for articles) and deepDive
         headlines = briefing.get("topHeadlines", [])
         for idx, h in enumerate(headlines, start=1):
             h["id"] = idx
+            h.pop("body", None)
+            if "deepDive" not in h or not isinstance(h.get("deepDive"), dict):
+                h["deepDive"] = make_default_deep_dive(
+                    category_id=h.get("categoryId"),
+                    headline=h.get("headline", ""),
+                    summary=h.get("summary", ""),
+                )
 
         items = briefing.get("articles", [])
         for idx, item in enumerate(items, start=len(headlines) + 1):
             item["id"] = idx
+            item.pop("body", None)
+            if "deepDive" not in item or not isinstance(item.get("deepDive"), dict):
+                item["deepDive"] = make_default_deep_dive(
+                    category_id=item.get("categoryId"),
+                    headline=item.get("headline", ""),
+                    summary=item.get("summary", ""),
+                )
 
         if "briefingDate" not in briefing or not briefing["briefingDate"]:
             briefing["briefingDate"] = self.briefing_date
@@ -480,7 +495,22 @@ class DailyBriefingPipeline:
             timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
         timestamped_archive_path = archive_dir / f"{timestamp_str}.json"
 
-        content = json.dumps(briefing, ensure_ascii=False, indent=2) + "\n"
+        # Ensure transient 'body' is never saved to disk and outputs clean JSON
+        def _clean_item(it: dict[str, Any]) -> dict[str, Any]:
+            cleaned = dict(it)
+            cleaned.pop("body", None)
+            return cleaned
+
+        clean_briefing = {
+            "briefingDate": briefing.get("briefingDate", self.briefing_date),
+            "topHeadlines": [_clean_item(h) for h in briefing.get("topHeadlines", [])],
+            "articles": [_clean_item(a) for a in briefing.get("articles", [])],
+        }
+        for k, v in briefing.items():
+            if k not in clean_briefing:
+                clean_briefing[k] = v
+
+        content = json.dumps(clean_briefing, ensure_ascii=False, indent=2) + "\n"
 
         with open(latest_path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -539,7 +569,8 @@ class DailyBriefingPipeline:
         feeds = self.load_feeds()
         candidates = self.fetch_candidate_articles(feeds)
         retained = self.filter_articles(candidates)
-        briefing = self.summarize(retained)
+        enriched = enrich_articles_with_body(retained, max_workers=self.max_workers)
+        briefing = self.summarize(enriched)
         self.write_outputs(briefing)
         pipeline_latency_ms = round((time.perf_counter() - self.pipeline_start_time) * 1000, 2)
         logger.info(

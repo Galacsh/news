@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from typing import Any
 import urllib.error
 
 import pytest
@@ -23,6 +24,22 @@ from src.pipeline import (
     parse_pipeline_date,
     run_pipeline,
 )
+
+
+@pytest.fixture(autouse=True)
+def mock_body_enrichment_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mock enrich_articles_with_body across pipeline tests to avoid live HTTP calls while setting transient body."""
+    def _mock_enrich(
+        articles: list[Article],
+        max_workers: int = 5,
+        extractor: Any = None,
+    ) -> list[Article]:
+        for art in articles:
+            if not getattr(art, "body", None):
+                art.body = f"모의 본문 텍스트: {art.title}"
+        return articles
+
+    monkeypatch.setattr("src.pipeline.enrich_articles_with_body", _mock_enrich)
 
 
 def test_load_env_files_priority(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -212,14 +229,24 @@ def test_run_pipeline_dry_run_success(
         assert "headline" in item
         assert "summary" in item
         assert "impact" in item
+        assert "deepDive" in item
         assert "links" in item
         assert "categoryId" in item
+        assert "body" not in item
 
     # 4. Articles have continuous sequential integer IDs starting from 4
     for idx, item in enumerate(latest_data["articles"], start=4):
         assert item["id"] == idx
         assert "headline" in item
+        assert "summary" in item
+        assert "impact" in item
+        assert "deepDive" in item
+        assert "links" in item
         assert "categoryId" in item
+        assert "body" not in item
+
+    assert '"body":' not in latest_file.read_text(encoding="utf-8")
+    assert '"body":' not in archive_file.read_text(encoding="utf-8")
 
     # 5. Archive content matches latest.json
     with open(archive_file, "r", encoding="utf-8") as f:
@@ -355,6 +382,9 @@ def test_run_pipeline_llm_error_fallback(
     assert len(briefing["topHeadlines"]) == 3
     assert briefing["topHeadlines"][0]["id"] == 1
     assert "국회 본회의 정치 현안 여야 전격 합의" in briefing["topHeadlines"][0]["headline"]
+    for item in briefing["topHeadlines"] + briefing.get("articles", []):
+        assert "deepDive" in item
+        assert "body" not in item
 
 
 def test_run_pipeline_empty_articles(
@@ -849,5 +879,178 @@ def test_generate_archive_manifest_empty_dir(tmp_path: Path) -> None:
     assert manifest["totalRuns"] == 0
     assert manifest["archives"] == []
     assert (empty_archive / "manifest.json").is_file()
+
+
+def test_pipeline_enriches_articles_with_body_and_strips_body_from_outputs(
+    tmp_path: Path,
+    mock_feeds_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify pipeline integrates body enrichment with max_workers and guarantees body never persists to disk."""
+    sample_article = Article(
+        id="art-body-test",
+        title="인공지능 반도체 신기술 발표",
+        summary="차세대 저전력 AI 반도체 혁신 기술이 공개되었습니다.",
+        url="https://example.com/news/ai-chip",
+        outlet="기술일보",
+        published_at="2026-10-25T12:00:00+00:00",
+        category="IT·과학",
+        category_id=3,
+    )
+
+    enrich_calls: list[dict[str, Any]] = []
+
+    def mock_enrich_tracker(articles: list[Article], max_workers: int = 5, extractor: Any = None) -> list[Article]:
+        enrich_calls.append({"count": len(articles), "max_workers": max_workers})
+        for art in articles:
+            art.body = f"상세한 전체 본문 텍스트: {art.title}에 관한 심층 취재 내용입니다."
+        return articles
+
+    monkeypatch.setattr("src.pipeline.enrich_articles_with_body", mock_enrich_tracker)
+    monkeypatch.setattr(
+        "src.ingest.rss.RSSFeedParser.parse_feed",
+        lambda url, category="", outlet="", timeout=10.0: [sample_article],
+    )
+
+    out_dir = tmp_path / "data_body_strip"
+    pipeline = DailyBriefingPipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=out_dir,
+        dry_run=True,
+        date="2026-10-25T12:00:00Z",
+        max_workers=4,
+    )
+
+    briefing = pipeline.run()
+
+    # 1. Verify enrich_articles_with_body was invoked with configured max_workers
+    assert len(enrich_calls) == 1
+    assert enrich_calls[0]["max_workers"] == 4
+    assert enrich_calls[0]["count"] >= 1
+
+    # 2. Output files exist
+    latest_file = out_dir / "latest.json"
+    archive_file = out_dir / "archive" / "2026-10-25_120000.json"
+    assert latest_file.is_file()
+    assert archive_file.is_file()
+
+    # 3. In-memory briefing returned has clean structure and no transient body
+    for item in briefing["topHeadlines"] + briefing["articles"]:
+        assert "headline" in item
+        assert "summary" in item
+        assert "impact" in item
+        assert "deepDive" in item
+        assert "links" in item
+        assert "body" not in item
+        assert isinstance(item["deepDive"], dict)
+        assert "lensTitle" in item["deepDive"]
+        assert "sections" in item["deepDive"]
+        assert len(item["deepDive"]["sections"]) == 2
+
+    # 4. JSON files written to disk never leak transient body
+    latest_content = latest_file.read_text(encoding="utf-8")
+    archive_content = archive_file.read_text(encoding="utf-8")
+    assert '"body":' not in latest_content
+    assert '"body":' not in archive_content
+
+    with open(latest_file, "r", encoding="utf-8") as f:
+        saved_latest = json.load(f)
+    for item in saved_latest["topHeadlines"] + saved_latest["articles"]:
+        assert "deepDive" in item
+        assert "body" not in item
+
+
+def test_pipeline_summarize_batched_and_fallback(
+    tmp_path: Path,
+    mock_feeds_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify summarize handles batched output and fallback error recovery with sequential IDs and deepDive."""
+    pipeline = DailyBriefingPipeline(
+        feeds_path=mock_feeds_file,
+        output_dir=tmp_path / "data_summarize",
+        dry_run=True,
+        date="2026-10-25",
+    )
+
+    art1 = Article(
+        id="art-1",
+        title="국회 본회의 기사",
+        summary="국회 요약",
+        url="https://example.com/1",
+        outlet="언론사A",
+        published_at="2026-10-25T10:00:00+00:00",
+        category="정치",
+        category_id=1,
+    )
+    art1.body = "정치 본문"
+
+    art2 = Article(
+        id="art-2",
+        title="기준금리 기사",
+        summary="금리 요약",
+        url="https://example.com/2",
+        outlet="언론사B",
+        published_at="2026-10-25T11:00:00+00:00",
+        category="경제·금융",
+        category_id=2,
+    )
+    art2.body = "경제 본문"
+
+    art3 = Article(
+        id="art-3",
+        title="인공지능 기술 기사",
+        summary="AI 요약",
+        url="https://example.com/3",
+        outlet="언론사C",
+        published_at="2026-10-25T12:00:00+00:00",
+        category="IT·과학",
+        category_id=3,
+    )
+    art3.body = "IT 본문"
+
+    articles = [art1, art2, art3]
+
+    # Normal summarization flow (calls summarizer.summarize_articles)
+    res_normal = pipeline.summarize(articles)
+    assert "topHeadlines" in res_normal
+    assert len(res_normal["topHeadlines"]) == 3
+    for idx, h in enumerate(res_normal["topHeadlines"], start=1):
+        assert h["id"] == idx
+        assert "deepDive" in h
+        assert "lensTitle" in h["deepDive"]
+        assert "sections" in h["deepDive"]
+        assert "body" not in h
+
+    for idx, a in enumerate(res_normal["articles"], start=4):
+        assert a["id"] == idx
+        assert "deepDive" in a
+        assert "lensTitle" in a["deepDive"]
+        assert "sections" in a["deepDive"]
+        assert "body" not in a
+
+    # Fallback flow: simulate error inside summarizer.summarize_articles
+    def mock_fail_summarize(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("Gemini API call failed")
+
+    monkeypatch.setattr(pipeline.summarizer, "summarize_articles", mock_fail_summarize)
+    res_fallback = pipeline.summarize(articles)
+
+    assert pipeline.gemini_fallback_used is True
+    assert len(res_fallback["topHeadlines"]) == 3
+    for idx, h in enumerate(res_fallback["topHeadlines"], start=1):
+        assert h["id"] == idx
+        assert "deepDive" in h
+        assert "lensTitle" in h["deepDive"]
+        assert "sections" in h["deepDive"]
+        assert "body" not in h
+
+    for idx, a in enumerate(res_fallback["articles"], start=4):
+        assert a["id"] == idx
+        assert "deepDive" in a
+        assert "lensTitle" in a["deepDive"]
+        assert "sections" in a["deepDive"]
+        assert "body" not in a
+
 
 
