@@ -84,11 +84,57 @@ def normalize_title(title: str | None) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
+def _normalize_outlet_brand(outlet: str | None) -> str:
+    """Normalize outlet name into a canonical brand name (lowercase, stripped of sub-category suffix)."""
+    if not outlet:
+        return ""
+    clean = outlet.strip().lower()
+    if " - " in clean:
+        clean = clean.split(" - ")[0].strip()
+    return clean
+
+
+def is_same_outlet_or_feed(art1: Article, art2: Article) -> bool:
+    """Determine whether two articles originate from the same outlet or identical feed."""
+    outlet1 = _normalize_outlet_brand(art1.outlet)
+    outlet2 = _normalize_outlet_brand(art2.outlet)
+
+    # Identical non-empty outlet brand (e.g. '연합뉴스')
+    if outlet1 and outlet2:
+        return outlet1 == outlet2
+
+    # Check feed URL or feed name in raw_data if available
+    feed1 = str(
+        (art1.raw_data or {}).get("feed")
+        or (art1.raw_data or {}).get("feed_url")
+        or (art1.raw_data or {}).get("feed_name")
+        or ""
+    ).strip().lower()
+    feed2 = str(
+        (art2.raw_data or {}).get("feed")
+        or (art2.raw_data or {}).get("feed_url")
+        or (art2.raw_data or {}).get("feed_name")
+        or ""
+    ).strip().lower()
+    if feed1 and feed2:
+        return feed1 == feed2
+
+    # If neither article has outlet or feed metadata, treat as same source
+    if not outlet1 and not outlet2 and not feed1 and not feed2:
+        return True
+
+    return False
+
+
 def deduplicate_articles(
     articles: list[Article],
     title_similarity_threshold: float = 0.8,
 ) -> list[Article]:
-    """Prune duplicate articles by canonical URL, unique ID, and title similarity.
+    """Prune duplicate articles by canonical URL, unique ID, and same-outlet title similarity.
+
+    Identical IDs and normalized URLs are pruned across all outlets.
+    Title similarity pruning only applies if articles originate from the same outlet or identical feed,
+    preserving cross-outlet coverage of the same event for downstream consensus clustering.
 
     Args:
         articles: List of Article objects.
@@ -103,7 +149,7 @@ def deduplicate_articles(
     accepted_articles: list[Article] = []
     seen_ids: set[str] = set()
     seen_urls: set[str] = set()
-    accepted_norm_titles: list[str] = []
+    accepted_records: list[tuple[str, Article]] = []
 
     for article in articles:
         # 1. Deduplicate by unique Article ID
@@ -117,13 +163,16 @@ def deduplicate_articles(
             logger.debug("Article url %s pruned as duplicate URL", article.url)
             continue
 
-        # 3. Deduplicate by title similarity
+        # 3. Deduplicate by title similarity (only within same outlet or identical feed)
         norm_title = normalize_title(article.title)
         is_title_duplicate = False
 
         if norm_title:
             len_curr = len(norm_title)
-            for prev_title in accepted_norm_titles:
+            for prev_title, prev_article in accepted_records:
+                if not is_same_outlet_or_feed(article, prev_article):
+                    continue
+
                 len_prev = len(prev_title)
                 # Quick upper bound test for SequenceMatcher ratio:
                 # ratio <= (2 * min(lenA, lenB)) / (lenA + lenB)
@@ -135,7 +184,7 @@ def deduplicate_articles(
                 if similarity >= title_similarity_threshold:
                     is_title_duplicate = True
                     logger.debug(
-                        "Article '%s' pruned due to title similarity (%0.2f) with '%s'",
+                        "Article '%s' pruned due to same-outlet title similarity (%0.2f) with '%s'",
                         article.title,
                         similarity,
                         prev_title,
@@ -151,7 +200,7 @@ def deduplicate_articles(
         if clean_url:
             seen_urls.add(clean_url)
         if norm_title:
-            accepted_norm_titles.append(norm_title)
+            accepted_records.append((norm_title, article))
 
         accepted_articles.append(article)
 
@@ -279,24 +328,85 @@ def calculate_jaccard_similarity(set_a: set[str], set_b: set[str]) -> float:
     return intersection / union if union > 0 else 0.0
 
 
+def format_related_title(title: str, outlet: str | None) -> str:
+    """Format related link title ensuring outlet prefix is included if not already present."""
+    clean_title = (title or "").strip()
+    if not clean_title:
+        return ""
+    if not outlet or not outlet.strip():
+        return clean_title
+
+    outlet_str = outlet.strip()
+    brand = outlet_str.split(" - ")[0].strip() if " - " in outlet_str else outlet_str
+    if not brand:
+        return clean_title
+
+    if (
+        clean_title.startswith(f"[{brand}]")
+        or clean_title.startswith(f"({brand})")
+        or clean_title.startswith(f"[{outlet_str}]")
+        or clean_title.startswith(f"({outlet_str})")
+        or clean_title.startswith(f"{brand}:")
+        or clean_title.startswith(f"{brand} -")
+    ):
+        return clean_title
+
+    return f"[{brand}] {clean_title}"
+
+
+def are_articles_same_topic(
+    art_a: Article,
+    art_b: Article,
+    tokens_a: set[str],
+    tokens_b: set[str],
+    similarity_threshold: float = 0.20,
+) -> bool:
+    """Check if two articles cover the same topic based on token overlap, Jaccard, overlap ratio, or string similarity."""
+    common_tokens = tokens_a & tokens_b
+
+    # 1) Number of common keywords len(tokens_a & tokens_b) >= 2 (e.g. {'바이낸스', '해킹'} or {'최불암', '별세'})
+    if len(common_tokens) >= 2:
+        return True
+
+    # 2) Title token Jaccard similarity >= 0.20
+    jaccard_sim = calculate_jaccard_similarity(tokens_a, tokens_b)
+    if jaccard_sim >= similarity_threshold:
+        return True
+
+    # 3) Minimum overlap ratio len(tokens_a & tokens_b) / min(len(tokens_a), len(tokens_b)) >= 0.30 (with min len >= 1)
+    min_len = min(len(tokens_a), len(tokens_b))
+    if min_len >= 1 and (len(common_tokens) / min_len) >= 0.30:
+        return True
+
+    # 4) SequenceMatcher string similarity >= 0.70
+    norm_a = normalize_title(art_a.title)
+    norm_b = normalize_title(art_b.title)
+    if norm_a and norm_b:
+        seq_sim = difflib.SequenceMatcher(None, norm_a, norm_b).ratio()
+        if seq_sim >= 0.70:
+            return True
+
+    return False
+
+
 def cluster_articles_by_topic(
     articles: list[Article],
-    similarity_threshold: float = 0.35,
+    similarity_threshold: float = 0.20,
     reference_time: datetime | None = None,
 ) -> list[Article]:
     """Cluster articles covering the same topic across outlets and rank by consensus.
 
-    1. Tokenize title and summary into keywords (Hangul words/nouns, numbers, alphanumeric).
-    2. Group articles covering the same topic via token Jaccard similarity.
+    1. Tokenize titles (and fallback to summary if title has no tokens) into keywords.
+    2. Group articles covering the same topic via common keywords, token Jaccard, overlap ratio, or SequenceMatcher.
     3. For each cluster, pick the best representative (longest title/summary, newest).
-    4. Attach other articles in the cluster as related_links:
-       [{"title": a.title, "url": a.url}, ...] to the representative.
+    4. Attach all other articles in the cluster as related_links:
+       [{"title": f"[{outlet}] {a.title}", "url": a.url}, ...] to the representative.
     5. Rank clusters by Consensus Score: `(distinct_outlets_count * 10) + recency_score`
        so stories covered by multiple independent outlets rank higher than single-outlet stories.
 
     Args:
         articles: List of Article instances to cluster.
-        similarity_threshold: Jaccard similarity threshold for clustering (default: 0.35).
+        similarity_threshold: Jaccard similarity threshold for clustering (default: 0.20).
         reference_time: Optional reference datetime for recency scoring.
 
     Returns:
@@ -315,7 +425,8 @@ def cluster_articles_by_topic(
         return [rep]
 
     article_tokens = [
-        extract_topic_keywords(f"{a.title} {a.summary}") for a in articles
+        extract_topic_keywords(a.title) or extract_topic_keywords(a.summary)
+        for a in articles
     ]
 
     n = len(articles)
@@ -337,15 +448,14 @@ def cluster_articles_by_topic(
             parent[root_j] = root_i
 
     for i in range(n):
-        tokens_i = article_tokens[i]
-        if not tokens_i:
-            continue
         for j in range(i + 1, n):
-            tokens_j = article_tokens[j]
-            if not tokens_j:
-                continue
-            sim = calculate_jaccard_similarity(tokens_i, tokens_j)
-            if sim >= similarity_threshold:
+            if are_articles_same_topic(
+                articles[i],
+                articles[j],
+                article_tokens[i],
+                article_tokens[j],
+                similarity_threshold=similarity_threshold,
+            ):
                 union(i, j)
 
     clusters: dict[int, list[Article]] = {}
@@ -388,10 +498,15 @@ def cluster_articles_by_topic(
         for other in sorted_others:
             if other.url and other.url not in seen_urls:
                 seen_urls.add(other.url)
-                related_links.append({"title": other.title, "url": other.url})
+                link_title = format_related_title(other.title, other.outlet)
+                related_links.append({"title": link_title, "url": other.url})
         rep.related_links = related_links
 
-        outlets = {m.outlet.strip() for m in cluster_members if m.outlet and m.outlet.strip()}
+        outlets = {
+            _normalize_outlet_brand(m.outlet)
+            for m in cluster_members
+            if _normalize_outlet_brand(m.outlet)
+        }
         distinct_outlets_count = max(1, len(outlets))
 
         member_dts = [
@@ -481,7 +596,7 @@ def filter_by_recency(
 def group_and_trim_by_category(
     articles: list[Article],
     categories: list[str],
-    max_per_category: int = 5,
+    max_per_category: int = 8,
 ) -> dict[str, list[Article]]:
     """Group articles by specified categories, sort descending by published_at, and trim to max_per_category.
 
@@ -574,9 +689,9 @@ def apply_adaptive_lookback(
     max_hours: float = 24.0,
     max_lookback_hours: float = 72.0,
     reference_time: datetime | None = None,
-    max_per_category: int = 5,
+    max_per_category: int = 8,
     title_similarity_threshold: float = 0.8,
-    cluster_similarity_threshold: float = 0.35,
+    cluster_similarity_threshold: float = 0.20,
     enable_clustering: bool = True,
 ) -> dict[str, list[Article]]:
     """Filter articles with adaptive category lookback fallback.
@@ -697,13 +812,13 @@ class ArticleFilterPipeline:
         self,
         categories: list[str] | None = None,
         max_hours: float = 24.0,
-        max_per_category: int = 5,
+        max_per_category: int = 8,
         title_similarity_threshold: float = 0.8,
         reference_time: datetime | None = None,
         min_per_category: int = 0,
         adaptive_lookback: bool = False,
         max_lookback_hours: float = 72.0,
-        cluster_similarity_threshold: float = 0.35,
+        cluster_similarity_threshold: float = 0.20,
         enable_clustering: bool = True,
     ) -> None:
         """Initialize the filtering pipeline.

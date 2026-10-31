@@ -16,10 +16,14 @@ from src.ingest.body_extractor import ArticleBodyExtractor, enrich_articles_with
 from src.ingest.filter import (
     ArticleFilterPipeline,
     apply_adaptive_lookback,
+    are_articles_same_topic,
     cluster_articles_by_topic,
     deduplicate_articles,
+    extract_topic_keywords,
     filter_by_recency,
+    format_related_title,
     group_and_trim_by_category,
+    is_same_outlet_or_feed,
     normalize_article_url,
     normalize_title,
     parse_iso_datetime,
@@ -139,7 +143,7 @@ def test_deduplicate_articles_by_id():
 
 
 def test_deduplicate_articles_by_title_similarity():
-    """Verify articles with highly similar titles across outlets are pruned."""
+    """Verify articles with similar titles from different outlets are preserved, while same-outlet duplicates are pruned."""
     a1 = Article(
         id="art-1",
         title="[속보] 한국은행, 기준금리 연 3.5% 동결 결정",
@@ -149,6 +153,7 @@ def test_deduplicate_articles_by_title_similarity():
         published_at="2026-10-25T08:00:00+00:00",
         category="경제·금융",
     )
+    # Cross-outlet article with similar title: MUST be preserved for clustering
     a2 = Article(
         id="art-2",
         title="한국은행, 기준금리 연 3.5% 동결 결정 - 한국경제",
@@ -156,6 +161,16 @@ def test_deduplicate_articles_by_title_similarity():
         url="https://hankyung.com/2",
         outlet="한국경제",
         published_at="2026-10-25T08:02:00+00:00",
+        category="경제·금융",
+    )
+    # Same-outlet duplicate of a1: MUST be pruned
+    a1_dup = Article(
+        id="art-dup",
+        title="한국은행 기준금리 연 3.5% 동결 결정",
+        summary="Summary Dup",
+        url="https://yna.co.kr/dup",
+        outlet="연합뉴스",
+        published_at="2026-10-25T08:01:00+00:00",
         category="경제·금융",
     )
     a3 = Article(
@@ -168,9 +183,9 @@ def test_deduplicate_articles_by_title_similarity():
         category="경제·금융",
     )
 
-    deduped = deduplicate_articles([a1, a2, a3], title_similarity_threshold=0.8)
-    assert len(deduped) == 2
-    assert [a.id for a in deduped] == ["art-1", "art-3"]
+    deduped = deduplicate_articles([a1, a2, a1_dup, a3], title_similarity_threshold=0.8)
+    assert len(deduped) == 3
+    assert [a.id for a in deduped] == ["art-1", "art-2", "art-3"]
 
 
 def test_deduplicate_articles_empty():
@@ -938,13 +953,13 @@ def test_adaptive_lookback_preserves_deduplication():
             published_at=(ref_time - timedelta(hours=35)).isoformat(),
             category="IT·통신",
         ),
-        # Candidate 3: Similar title to recent
+        # Candidate 3: Similar title to recent (same outlet, should be pruned)
         Article(
             id="it-cand-3",
             title="통신3사 6G 표준화 공동 협의체 출범 발표",
             summary="",
             url="https://news.com/it_cand3",
-            outlet="O3",
+            outlet="O1",
             published_at=(ref_time - timedelta(hours=40)).isoformat(),
             category="IT·통신",
         ),
@@ -1442,4 +1457,253 @@ def test_enrich_articles_with_body_concurrent():
     for idx, art in enumerate(enriched_list):
         assert art.id == f"c-{idx}"
         assert "성공적으로 추출된 본문 텍스트입니다." in art.body
+
+
+# ============================================================================
+# 9. Cross-Outlet Consensus & Enhanced Topic Clustering Tests (TASK-02)
+# ============================================================================
+
+
+def test_is_same_outlet_or_feed():
+    """Verify outlet brand matching and fallback logic."""
+    a1 = Article(id="1", title="A", summary="", url="http://1", outlet="연합뉴스", published_at="")
+    a2 = Article(id="2", title="B", summary="", url="http://2", outlet="연합뉴스 - 정치", published_at="")
+    a3 = Article(id="3", title="C", summary="", url="http://3", outlet="동아일보", published_at="")
+
+    # Same brand
+    assert is_same_outlet_or_feed(a1, a2) is True
+    # Different outlet
+    assert is_same_outlet_or_feed(a1, a3) is False
+    assert is_same_outlet_or_feed(a2, a3) is False
+
+    # Raw data feed match
+    a4 = Article(id="4", title="D", summary="", url="http://4", outlet="", published_at="", raw_data={"feed_url": "https://f.com/rss"})
+    a5 = Article(id="5", title="E", summary="", url="http://5", outlet="", published_at="", raw_data={"feed_url": "https://f.com/rss"})
+    assert is_same_outlet_or_feed(a4, a5) is True
+
+    # Empty metadata on both falls back to same source
+    a6 = Article(id="6", title="F", summary="", url="http://6", outlet="", published_at="")
+    a7 = Article(id="7", title="G", summary="", url="http://7", outlet="", published_at="")
+    assert is_same_outlet_or_feed(a6, a7) is True
+
+    # One empty, one specified
+    assert is_same_outlet_or_feed(a1, a6) is False
+
+
+def test_format_related_title():
+    """Verify format_related_title attaches outlet prefix and avoids duplication."""
+    assert format_related_title("기사 제목", "연합뉴스") == "[연합뉴스] 기사 제목"
+    assert format_related_title("기사 제목", "연합뉴스 - 경제") == "[연합뉴스] 기사 제목"
+    # Already prefixed
+    assert format_related_title("[연합뉴스] 기사 제목", "연합뉴스") == "[연합뉴스] 기사 제목"
+    assert format_related_title("(연합뉴스) 기사 제목", "연합뉴스") == "(연합뉴스) 기사 제목"
+    assert format_related_title("연합뉴스: 기사 제목", "연합뉴스") == "연합뉴스: 기사 제목"
+    assert format_related_title("연합뉴스 - 기사 제목", "연합뉴스") == "연합뉴스 - 기사 제목"
+    # Empty outlet or empty title
+    assert format_related_title("기사 제목", "") == "기사 제목"
+    assert format_related_title("기사 제목", None) == "기사 제목"
+    assert format_related_title("", "연합뉴스") == ""
+
+
+def test_clustering_criteria_conditions():
+    """Verify that any of the 4 clustering matching criteria connects two articles into a topic cluster."""
+    # 1) Common keywords >= 2: e.g. {'최불암', '별세'}
+    art_a = Article(
+        id="c1-a",
+        title="국민배우 최불암 오늘 별세 향년 85세",
+        summary="원로배우 최불암 선생이 별세했다.",
+        url="http://news.com/c1a",
+        outlet="언론A",
+        published_at="2026-10-31T09:00:00+00:00",
+    )
+    art_b = Article(
+        id="c1-b",
+        title="배우 최불암 별세 소식에 각계 애도 물결 이어져",
+        summary="최불암 별세 소식에 추모가 잇따르고 있다.",
+        url="http://news.com/c1b",
+        outlet="언론B",
+        published_at="2026-10-31T09:10:00+00:00",
+    )
+    tok_a = extract_topic_keywords(art_a.title)
+    tok_b = extract_topic_keywords(art_b.title)
+    assert len(tok_a & tok_b) >= 2
+    assert are_articles_same_topic(art_a, art_b, tok_a, tok_b) is True
+
+    # 2) Title token Jaccard similarity >= 0.20
+    art_c = Article(
+        id="c2-a",
+        title="글로벌 암호화폐 거래소 바이낸스 해킹 사태 발생",
+        summary="",
+        url="http://news.com/c2a",
+        outlet="언론A",
+        published_at="2026-10-31T10:00:00+00:00",
+    )
+    art_d = Article(
+        id="c2-b",
+        title="바이낸스 해킹 의혹... 1조원대 코인 유출",
+        summary="",
+        url="http://news.com/c2b",
+        outlet="언론B",
+        published_at="2026-10-31T10:05:00+00:00",
+    )
+    tok_c = extract_topic_keywords(art_c.title)
+    tok_d = extract_topic_keywords(art_d.title)
+    assert are_articles_same_topic(art_c, art_d, tok_c, tok_d) is True
+
+    # 3) Overlap ratio >= 0.30 with min len >= 1
+    art_e = Article(
+        id="c3-a",
+        title="기준금리 동결",
+        summary="",
+        url="http://news.com/c3a",
+        outlet="언론A",
+        published_at="2026-10-31T11:00:00+00:00",
+    )
+    art_f = Article(
+        id="c3-b",
+        title="한국은행 금융통화위원회 기준금리 연 3.5% 만장일치 동결",
+        summary="",
+        url="http://news.com/c3b",
+        outlet="언론B",
+        published_at="2026-10-31T11:05:00+00:00",
+    )
+    tok_e = extract_topic_keywords(art_e.title)
+    tok_f = extract_topic_keywords(art_f.title)
+    assert are_articles_same_topic(art_e, art_f, tok_e, tok_f) is True
+
+    # 4) SequenceMatcher string similarity >= 0.70
+    art_g = Article(
+        id="c4-a",
+        title="정부 유류세 한시 인하 2개월 추가 연장 발표",
+        summary="",
+        url="http://news.com/c4a",
+        outlet="언론A",
+        published_at="2026-10-31T12:00:00+00:00",
+    )
+    art_h = Article(
+        id="c4-b",
+        title="정부 유류세 한시 인하 2개월 추가 연장 결정",
+        summary="",
+        url="http://news.com/c4b",
+        outlet="언론B",
+        published_at="2026-10-31T12:05:00+00:00",
+    )
+    tok_g = extract_topic_keywords(art_g.title)
+    tok_h = extract_topic_keywords(art_h.title)
+    assert are_articles_same_topic(art_g, art_h, tok_g, tok_h) is True
+
+    # Unrelated articles should not match
+    art_unrelated = Article(
+        id="unrel",
+        title="국립중앙박물관 특별전 개막 안내",
+        summary="박물관 특별전이 열립니다.",
+        url="http://news.com/unrel",
+        outlet="언론C",
+        published_at="2026-10-31T12:10:00+00:00",
+    )
+    tok_unrel = extract_topic_keywords(art_unrelated.title)
+    assert are_articles_same_topic(art_a, art_unrelated, tok_a, tok_unrel) is False
+
+
+def test_cross_outlet_consensus_clustering_pipeline_end_to_end():
+    """Verify that multiple outlets covering the same breaking story survive deduplication and cluster together with distinct outlet links."""
+    ref_time = datetime(2026, 10, 31, 14, 0, 0, tzinfo=timezone.utc)
+
+    # 3 outlets covering the same breaking story
+    art_yonhap = Article(
+        id="y-1",
+        title="[속보] 가상화폐 거래소 바이낸스, 대규모 해킹 피해 발생",
+        summary="세계 최대 가상화폐 거래소 바이낸스가 대규모 해킹 공격을 받아 수천억원 상당의 자산이 탈취된 것으로 알려졌다.",
+        url="https://yna.co.kr/news/10001",
+        outlet="연합뉴스",
+        published_at=(ref_time - timedelta(minutes=40)).isoformat(),
+        category="IT·통신",
+    )
+    # Duplicate from the SAME outlet: must be pruned by same-outlet deduplication
+    art_yonhap_dup = Article(
+        id="y-2",
+        title="가상화폐 거래소 바이낸스 대규모 해킹 피해 발생",
+        summary="바이낸스 해킹 피해 발생 소식입니다.",
+        url="https://yna.co.kr/news/10002",
+        outlet="연합뉴스",
+        published_at=(ref_time - timedelta(minutes=35)).isoformat(),
+        category="IT·통신",
+    )
+    # Same breaking story from 동아일보: MUST NOT be discarded by deduplication
+    art_donga = Article(
+        id="d-1",
+        title="바이낸스 1조원대 해킹 발생... 가상화폐 시장 충격",
+        summary="가상화폐 거래소 바이낸스에서 대규모 해킹이 발생해 시장이 큰 충격을 받고 있다.",
+        url="https://donga.com/news/20001",
+        outlet="동아일보",
+        published_at=(ref_time - timedelta(minutes=30)).isoformat(),
+        category="IT·통신",
+    )
+    # Same breaking story from 매일경제: MUST NOT be discarded by deduplication
+    art_mk = Article(
+        id="m-1",
+        title="세계 최대 거래소 바이낸스 해킹 당해... 출금 일시 중단",
+        summary="바이낸스가 시스템 보안 점검 및 해킹 조사로 출금을 일시 중단했다.",
+        url="https://mk.co.kr/news/30001",
+        outlet="매일경제",
+        published_at=(ref_time - timedelta(minutes=20)).isoformat(),
+        category="IT·통신",
+    )
+    # Independent single-outlet story
+    art_independent = Article(
+        id="ind-1",
+        title="정부, 2027년까지 우주항공 클러스터 조성 계획 발표",
+        summary="정부가 우주항공 복합도시 건설을 위한 종합계획을 공식 발표했다.",
+        url="https://donga.com/news/99999",
+        outlet="동아일보",
+        published_at=(ref_time - timedelta(minutes=10)).isoformat(),
+        category="IT·통신",
+    )
+
+    pipeline = ArticleFilterPipeline(
+        categories=["IT·통신"],
+        max_hours=24.0,
+        reference_time=ref_time,
+        enable_clustering=True,
+    )
+
+    all_articles = [art_yonhap, art_yonhap_dup, art_donga, art_mk, art_independent]
+    grouped = pipeline.process(all_articles)
+
+    assert "IT·통신" in grouped
+    cluster_results = grouped["IT·통신"]
+
+    # Should have 2 clusters: the 3-outlet consensus story and the independent story
+    assert len(cluster_results) == 2
+
+    consensus_story = cluster_results[0]
+    single_story = cluster_results[1]
+
+    # Consensus story must rank first
+    assert (consensus_story.raw_data or {}).get("distinct_outlets_count") == 3
+    assert (consensus_story.raw_data or {}).get("consensus_score") >= 30.0
+    assert (single_story.raw_data or {}).get("distinct_outlets_count") == 1
+    assert (single_story.raw_data or {}).get("consensus_score") < 20.0
+
+    # Verify related_links on the consensus representative
+    assert len(consensus_story.related_links) == 2
+    related_outlets_in_titles = set()
+    for link in consensus_story.related_links:
+        assert "title" in link and "url" in link
+        title = link["title"]
+        if title.startswith("[동아일보]"):
+            related_outlets_in_titles.add("동아일보")
+        elif title.startswith("[매일경제]"):
+            related_outlets_in_titles.add("매일경제")
+        elif title.startswith("[연합뉴스]"):
+            related_outlets_in_titles.add("연합뉴스")
+
+    # Should have the 2 other outlets in the related_links titles
+    assert len(related_outlets_in_titles) == 2
+
+
+def test_pipeline_default_max_per_category():
+    """Verify ArticleFilterPipeline default max_per_category is increased to 8."""
+    pipeline = ArticleFilterPipeline()
+    assert pipeline.max_per_category == 8
 
