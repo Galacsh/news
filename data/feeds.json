@@ -15,6 +15,13 @@
       "is_active": true
     },
     {
+      "name": "매일경제 - 정치",
+      "url": "https://www.mk.co.kr/rss/30200030/",
+      "categoryId": 1,
+      "category": "정치",
+      "is_active": true
+    },
+    {
       "name": "연합뉴스 - 경제",
       "url": "https://www.yna.co.kr/rss/economy.xml",
       "categoryId": 2,
@@ -24,6 +31,20 @@
     {
       "name": "한국경제 - 경제",
       "url": "https://www.hankyung.com/feed/economy",
+      "categoryId": 2,
+      "category": "경제·금융",
+      "is_active": true
+    },
+    {
+      "name": "매일경제 - 경제",
+      "url": "https://www.mk.co.kr/rss/30100041/",
+      "categoryId": 2,
+      "category": "경제·금융",
+      "is_active": true
+    },
+    {
+      "name": "동아일보 - 경제",
+      "url": "https://rss.donga.com/economy.xml",
       "categoryId": 2,
       "category": "경제·금융",
       "is_active": true
@@ -43,6 +64,13 @@
       "is_active": true
     },
     {
+      "name": "매일경제 - 기업경영",
+      "url": "https://www.mk.co.kr/rss/50100032/",
+      "categoryId": 3,
+      "category": "산업·기업",
+      "is_active": true
+    },
+    {
       "name": "연합뉴스 - 사회",
       "url": "https://www.yna.co.kr/rss/society.xml",
       "categoryId": 4,
@@ -57,6 +85,13 @@
       "is_active": true
     },
     {
+      "name": "매일경제 - 사회",
+      "url": "https://www.mk.co.kr/rss/50400012/",
+      "categoryId": 4,
+      "category": "사회",
+      "is_active": true
+    },
+    {
       "name": "연합뉴스 - 국제",
       "url": "https://www.yna.co.kr/rss/international.xml",
       "categoryId": 5,
@@ -66,6 +101,13 @@
     {
       "name": "동아일보 - 국제",
       "url": "https://rss.donga.com/global.xml",
+      "categoryId": 5,
+      "category": "국제·글로벌",
+      "is_active": true
+    },
+    {
+      "name": "매일경제 - 국제",
+      "url": "https://www.mk.co.kr/rss/30300018/",
       "categoryId": 5,
       "category": "국제·글로벌",
       "is_active": true
@@ -92,8 +134,8 @@
       "is_active": true
     },
     {
-      "name": "블로터 - 전체기사",
-      "url": "https://www.bloter.net/rss/allArticle.xml",
+      "name": "지디넷코리아 - AI/IT",
+      "url": "https://zdnet.co.kr/feed/",
       "categoryId": 6,
       "category": "AI·빅테크",
       "is_active": true
@@ -141,15 +183,15 @@
       "is_active": true
     },
     {
-      "name": "조선일보 - 문화",
-      "url": "https://www.chosun.com/arc/outboundfeeds/rss/category/culture-life/?outputType=xml",
+      "name": "매일경제 - 문화/연예",
+      "url": "https://www.mk.co.kr/rss/30000023/",
       "categoryId": 8,
       "category": "문화·콘텐츠",
       "is_active": true
     },
     {
-      "name": "매일경제 - 문화/연예",
-      "url": "https://www.mk.co.kr/rss/30000023/",
+      "name": "SBS - 연예/문화",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=07",
       "categoryId": 8,
       "category": "문화·콘텐츠",
       "is_active": true
@@ -162,8 +204,22 @@
       "is_active": true
     },
     {
-      "name": "경향신문 - 스포츠",
-      "url": "https://www.khan.co.kr/rss/rssdata/kh_sports.xml",
+      "name": "동아일보 - 스포츠",
+      "url": "https://rss.donga.com/sports.xml",
+      "categoryId": 9,
+      "category": "스포츠",
+      "is_active": true
+    },
+    {
+      "name": "SBS - 스포츠",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=09",
+      "categoryId": 9,
+      "category": "스포츠",
+      "is_active": true
+    },
+    {
+      "name": "일간스포츠 - 스포츠",
+      "url": "http://isplus.joins.com/rss/",
       "categoryId": 9,
       "category": "스포츠",
       "is_active": true

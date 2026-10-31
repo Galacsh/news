@@ -474,3 +474,65 @@ class TestFeedFetchingResilience:
         )
         assert len(articles) == 1
         assert articles[0].title == "Item 1"
+
+
+def test_feed_catalog_compliance_and_coverage():
+    """Verify data/feeds.json and DEFAULT_FALLBACK_FEEDS comply with legal bot policies and 10 categories."""
+    import json
+    from pathlib import Path
+    from collections import Counter
+    from src.ingest.sources import DEFAULT_FALLBACK_FEEDS
+
+    press_file = Path("data/presslist.json")
+    assert press_file.exists(), "presslist.json must exist"
+    with open(press_file, encoding="utf-8") as f:
+        press_data = json.load(f)
+    bot_false_outlets = {
+        item["nm"]
+        for item in press_data.get("list", [])
+        if not item.get("bot", True)
+    }
+    # Explicitly check known disallowed outlets
+    assert "조선일보" in bot_false_outlets
+    assert "경향신문" in bot_false_outlets
+    assert "블로터" in bot_false_outlets
+
+    cat_file = Path("data/categories.json")
+    assert cat_file.exists(), "categories.json must exist"
+    with open(cat_file, encoding="utf-8") as f:
+        cat_data = json.load(f)
+    categories = cat_data.get("categories", [])
+    assert len(categories) == 10
+    cat_map = {c["id"]: c["name"] for c in categories}
+
+    # 1. Validate data/feeds.json
+    feeds_file = Path("data/feeds.json")
+    assert feeds_file.exists(), "data/feeds.json must exist"
+    with open(feeds_file, encoding="utf-8") as f:
+        feeds_catalog = json.load(f)
+
+    active_feeds = [f for f in feeds_catalog.get("feeds", []) if f.get("is_active", True)]
+    feeds_per_cat = Counter(f["categoryId"] for f in active_feeds)
+
+    for cat_id, cat_name in cat_map.items():
+        count = feeds_per_cat[cat_id]
+        assert 2 <= count <= 4, f"Category {cat_id} ({cat_name}) must have 2~4 feeds, found {count}"
+
+    for f in active_feeds:
+        outlet = f["name"].split(" - ")[0].strip()
+        assert outlet not in bot_false_outlets, f"Feed {f['name']} belongs to bot:false outlet {outlet}"
+        assert f["categoryId"] in cat_map, f"Invalid categoryId {f.get('categoryId')}"
+        assert f["category"] == cat_map[f["categoryId"]], f"Category name mismatch in feed {f['name']}"
+
+    # 2. Validate DEFAULT_FALLBACK_FEEDS in src.ingest.sources
+    fallback_per_cat = Counter(f.category_id for f in DEFAULT_FALLBACK_FEEDS if f.is_active)
+    for cat_id, cat_name in cat_map.items():
+        count = fallback_per_cat[cat_id]
+        assert 2 <= count <= 4, f"Fallback Category {cat_id} ({cat_name}) must have 2~4 feeds, found {count}"
+
+    for f in DEFAULT_FALLBACK_FEEDS:
+        outlet = f.name.split(" - ")[0].strip()
+        assert outlet not in bot_false_outlets, f"Fallback feed {f.name} belongs to bot:false outlet {outlet}"
+        assert f.category_id in cat_map, f"Invalid category_id {f.category_id}"
+        assert f.category == cat_map[f.category_id], f"Category name mismatch in fallback feed {f.name}"
+
