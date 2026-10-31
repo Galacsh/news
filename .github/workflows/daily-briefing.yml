@@ -2,9 +2,16 @@ name: Daily News Briefing
 
 on:
   schedule:
-    - cron: '43 6 * * *'
+    - cron: '45 6 * * *'
       timezone: 'Asia/Seoul'
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'data/**'
+      - '.project/**'
+      - 'README.md'
 
 permissions:
   contents: write
@@ -18,6 +25,7 @@ concurrency:
 jobs:
   briefing:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

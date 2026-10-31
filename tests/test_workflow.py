@@ -25,11 +25,13 @@ def test_workflow_file_exists() -> None:
 def test_workflow_triggers(workflow_content: str) -> None:
     """Verify that schedule cron and workflow_dispatch triggers are configured."""
     assert "on:" in workflow_content
-    cron_match = re.search(r"cron:\s*['\"]43 6 \* \* \*['\"]", workflow_content)
-    assert cron_match is not None, "Expected cron schedule '43 6 * * *' not found"
+    cron_match = re.search(r"cron:\s*['\"]45 6 \* \* \*['\"]", workflow_content)
+    assert cron_match is not None, "Expected cron schedule '45 6 * * *' not found"
     tz_match = re.search(r"timezone:\s*['\"]Asia/Seoul['\"]", workflow_content)
     assert tz_match is not None, "Expected timezone 'Asia/Seoul' not found"
     assert "workflow_dispatch:" in workflow_content
+    assert "push:" in workflow_content
+    assert re.search(r"branches:\s*-\s*main", workflow_content) or "- main" in workflow_content
 
 
 def test_workflow_permissions(workflow_content: str) -> None:
@@ -48,15 +50,21 @@ def test_workflow_concurrency(workflow_content: str) -> None:
 
 
 def test_workflow_briefing_job_setup(workflow_content: str) -> None:
-    """Verify checkout and Python 3.13 setup with pip caching."""
+    """Verify checkout, timeout, and Python 3.13 setup with pip caching."""
     assert "briefing:" in workflow_content
     assert "runs-on: ubuntu-latest" in workflow_content
+    assert re.search(r"timeout-minutes:\s*15", workflow_content) is not None
     assert "actions/checkout@v4" in workflow_content
     assert re.search(r"fetch-depth:\s*0", workflow_content) is not None
     assert "actions/setup-python@v5" in workflow_content
     assert re.search(r"python-version:\s*['\"]3\.13['\"]", workflow_content) is not None
     assert re.search(r"cache:\s*['\"]pip['\"]", workflow_content) is not None
     assert "pip install -r requirements.txt" in workflow_content
+
+
+def test_workflow_briefing_job_timeout(workflow_content: str) -> None:
+    """Verify briefing job has timeout-minutes: 15 configured for safety."""
+    assert re.search(r"timeout-minutes:\s*15", workflow_content) is not None
 
 
 def test_workflow_pipeline_execution(workflow_content: str) -> None:
