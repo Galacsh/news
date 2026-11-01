@@ -192,7 +192,7 @@
                     id="relatedArticlesSection"
                     class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-sm space-y-4"
                 >
-                    <div class="flex items-center justify-between pb-3.5 border-b border-slate-800/80">
+                    <div class="flex items-center pb-3.5 border-b border-slate-800/80">
                         <div class="flex items-center gap-2.5">
                             <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 shrink-0">
                                 <i class="ph-bold ph-newspaper text-base"></i>
@@ -202,12 +202,6 @@
                                 <p class="text-xs text-slate-400">다양한 언론사의 보도 원문을 직접 확인하실 수 있습니다.</p>
                             </div>
                         </div>
-                        <span
-                            id="articlesCountBadge"
-                            class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700/60"
-                        >
-                            총 0건
-                        </span>
                     </div>
 
                     <!-- Non-collapsible expanded source links list -->
@@ -474,12 +468,7 @@
 
                     // 8. Related Articles Section (Non-collapsible, always visible expanded list)
                     const linksList = document.getElementById("relatedLinksList");
-                    const articlesCountBadge = document.getElementById("articlesCountBadge");
                     const links = Array.isArray(item.links) ? item.links : [];
-
-                    if (articlesCountBadge) {
-                        articlesCountBadge.textContent = `총 ${links.length}건`;
-                    }
 
                     if (linksList) {
                         if (links.length > 0) {
