@@ -398,7 +398,7 @@ def test_detail_html_dom_structures(detail_dom: DOMIdParser, detail_html_content
     # Related source articles: always visible expanded list
     assert "relatedArticlesSection" in detail_dom.ids
     assert "relatedLinksList" in detail_dom.ids
-    assert "articlesCountBadge" in detail_dom.ids
+    assert "articlesCountBadge" not in detail_dom.ids
 
     # Non-collapsible: no accordion or toggle button inside related links list
     assert "toggleCardView" not in detail_html_content
