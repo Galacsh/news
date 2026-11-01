@@ -15,3 +15,4 @@
 | [SLICE-0011](SLICE-0011-multi-outlet-clustering-and-category-quota.md) | Rich multi-outlet consensus clustering & exact 3-article category quota | completed | [REQ-0005](../requirements/REQ-0005-multi-outlet-clustering-and-category-quota.md) | Closed |
 | [SLICE-0012](SLICE-0012-mobile-responsive-ui-polish.md) | Mobile header & non-content responsive UI polish | completed | [REQ-0006](../requirements/REQ-0006-mobile-responsive-ui-polish.md) | Closed |
 | [SLICE-0013](SLICE-0013-safe-consensus-clustering-and-links-cap.md) | Safe category-isolated consensus clustering & strict 5-link cap | completed | [REQ-0007](../requirements/REQ-0007-safe-consensus-clustering-and-links-cap.md) | Closed |
+| [SLICE-0014](SLICE-0014-detail-remove-articles-count-badge.md) | Remove article count badge from related articles section in detail page | completed | [REQ-0008](../requirements/REQ-0008-detail-remove-articles-count-badge.md) | Closed |
