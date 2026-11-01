@@ -179,28 +179,20 @@
                 class="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-6 bg-slate-950/95 backdrop-blur-md border-y border-slate-800/80 shadow-sm"
             >
                 <div class="max-w-7xl mx-auto">
-                    <div class="flex items-center justify-between gap-4 mb-2">
-                        <div class="flex items-center gap-2">
-                            <span
-                                class="w-7 h-7 aspect-square rounded-md bg-sky-500/20 text-sky-400 flex items-center justify-center"
-                            >
-                                <i
-                                    class="ph-bold ph-squares-four text-base"
-                                ></i>
-                            </span>
-                            <h2
-                                id="currentCategoryTitle"
-                                class="text-sm font-bold text-white break-keep"
-                            >
-                                분야별 핵심 브리핑
-                            </h2>
-                        </div>
+                    <div class="flex items-center gap-2 mb-2">
                         <span
-                            id="articleCountBadge"
-                            class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0"
+                            class="w-7 h-7 aspect-square rounded-md bg-sky-500/20 text-sky-400 flex items-center justify-center"
                         >
-                            0건
+                            <i
+                                class="ph-bold ph-squares-four text-base"
+                            ></i>
                         </span>
+                        <h2
+                            id="currentCategoryTitle"
+                            class="text-sm font-bold text-white break-keep"
+                        >
+                            분야별 핵심 브리핑
+                        </h2>
                     </div>
 
                     <!-- Category Filter Buttons -->
@@ -468,7 +460,6 @@
             // 6. Render News Grid by Category (ID-first matching)
             function renderCategoryNews() {
                 const container = document.getElementById("newsGrid");
-                const countBadge = document.getElementById("articleCountBadge");
                 const currentCategoryTitle = document.getElementById(
                     "currentCategoryTitle",
                 );
@@ -488,10 +479,6 @@
                     const matchingNames = [activeDef.name, ...(activeDef.aliases || [])];
                     return matchingNames.includes(item.category);
                 });
-
-                if (countBadge) {
-                    countBadge.innerText = `${filtered.length}건`;
-                }
 
                 if (!container) return;
                 if (filtered.length === 0) {
