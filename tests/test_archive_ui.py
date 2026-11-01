@@ -390,10 +390,12 @@ def test_detail_html_dom_structures(detail_dom: DOMIdParser, detail_html_content
 
     # Deep-Dive analytical section
     assert "deepDiveSection" in detail_dom.ids
-    assert "lensTitleBadge" in detail_dom.ids
-    assert "lensTitleText" in detail_dom.ids
+    assert "lensTitleBadge" not in detail_dom.ids
+    assert "lensTitleText" not in detail_dom.ids
     assert "deepDiveSectionsContainer" in detail_dom.ids
     assert "deepDiveFallbackNotice" in detail_dom.ids
+    assert "심층 분석" in detail_html_content
+    assert "분야별로 심층적으로 분석했어요." in detail_html_content
 
     # Related source articles: always visible expanded list
     assert "relatedArticlesSection" in detail_dom.ids
@@ -427,7 +429,6 @@ def test_detail_html_javascript_logic(detail_html_content: str):
 
     # Deep-Dive rendering and fallback logic
     assert "deepDive" in detail_html_content
-    assert "lensTitle" in detail_html_content
     assert "sections" in detail_html_content
     assert "deepDiveFallbackNotice" in detail_html_content
 
