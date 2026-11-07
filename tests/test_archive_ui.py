@@ -432,6 +432,32 @@ def test_detail_html_javascript_logic(detail_html_content: str):
     assert "sections" in detail_html_content
     assert "deepDiveFallbackNotice" in detail_html_content
 
+    # Related articles links sanitization & outlet extraction logic
+    assert "getOutletName(link)" in detail_html_content
+    assert "replace(/^(?:\\[[^\\]]+\\]\\s*)+/" in detail_html_content
+    assert "rawTitle || link.title || \"원문 기사\"" in detail_html_content
+
+
+def test_detail_html_related_links_title_sanitization_patterns(detail_html_content: str):
+    """Verify regex patterns used in detail.html for stripping bracketed prefixes."""
+    import re
+
+    # Pattern used in detail.html: /^(?:\[[^\]]+\]\s*)+/
+    bracket_pattern = re.compile(r"^(?:\[[^\]]+\]\s*)+")
+    hyphen_pattern = re.compile(r"^[^\s]+ - \s*")
+
+    def sanitize(title: str) -> str:
+        s = bracket_pattern.sub("", (title or "").strip()).strip()
+        s = hyphen_pattern.sub("", s).strip()
+        return s or title or "원문 기사"
+
+    assert sanitize("[한겨레] 홍익표 정무수석 사의") == "홍익표 정무수석 사의"
+    assert sanitize("[한국경제 - 라이프] '오디세이...'") == "'오디세이...'"
+    assert sanitize("[속보] 미래에셋증권 해킹") == "미래에셋증권 해킹"
+    assert sanitize("[연합뉴스][속보] 대통령 지지율") == "대통령 지지율"
+    assert sanitize("일반 기사 제목") == "일반 기사 제목"
+    assert sanitize("[단독]") == "[단독]"  # fallback to original if stripped empty
+
 
 def test_index_html_card_navigation_to_detail(index_html_content: str):
     """Verify index.html cards navigate to detail.html with id and preserved archive param, and toggle views are removed."""
