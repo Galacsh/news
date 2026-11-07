@@ -479,3 +479,19 @@ def test_archive_html_detail_navigation(archive_html_content: str):
     """Verify archive.html preview cards navigate to detail.html with id and archive query parameters."""
     assert "detail.html?id=" in archive_html_content
     assert "&archive=" in archive_html_content
+
+
+def test_index_html_refresh_toast_message(index_html_content: str):
+    """Verify index.html toast message for no updates is clean and concise."""
+    assert 'showToast("새로운 변경 사항이 없습니다.", "info")' in index_html_content
+    assert "(최신 상태 유지 중)" not in index_html_content
+
+
+def test_detail_html_deep_dive_label_normalization(detail_html_content: str):
+    """Verify detail.html defines formatDeepDiveLabel and maps verbose subheadings to concise terms."""
+    assert "formatDeepDiveLabel" in detail_html_content
+    assert "formatDeepDiveLabel(sec.label)" in detail_html_content
+    # Mapping checks
+    assert '"마케팅 빼고 진짜 바뀐 기술 본질": "본질"' in detail_html_content
+    assert '"개발자·실무·생태계 판도 변화": "판도 변화"' in detail_html_content
+    assert '"왜 지금 나왔나 (숨은 셈법)": "의도"' in detail_html_content

@@ -646,6 +646,14 @@ def test_deep_dive_schema_compliance_all_10_categories():
         assert isinstance(lens["sections"], list)
         assert len(lens["sections"]) == 2
 
+    # Specific category concise section subheadings check
+    assert CATEGORY_LENSES[1]["sections"] == ["의도", "실현 가능성"]
+    assert CATEGORY_LENSES[6]["sections"] == ["본질", "판도 변화"]
+    assert CATEGORY_LENSES[10]["sections"] == ["팩트 체크", "행동 요령"]
+
+    for cat_id in range(1, 11):
+        lens = CATEGORY_LENSES[cat_id]
+
         # Check default deep dive generation
         dd = make_default_deep_dive(cat_id, headline="테스트 기사 제목")
         assert dd["lensTitle"] == lens["lensTitle"]
