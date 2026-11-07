@@ -13,3 +13,4 @@
 | [REQ-0009](REQ-0009-detail-deep-dive-ui-copy-refinement.md) | Detail page deep-dive section UI copy refinement & tag removal | completed | SLICE-0015 |
 | [REQ-0010](REQ-0010-index-remove-category-count-badge.md) | Remove article count badge from category selection area in main page | completed | SLICE-0016 |
 | [REQ-0011](REQ-0011-detail-related-links-title-clean.md) | Clean related link titles and strip leading bracketed prefixes in detail page | completed | SLICE-0017 |
+| [REQ-0012](REQ-0012-deep-dive-subtitles-and-toast-refinement.md) | Deep-dive section subtitle simplification & main toast copy refinement | completed | SLICE-0018 |
