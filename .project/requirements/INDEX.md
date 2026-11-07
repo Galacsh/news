@@ -11,4 +11,5 @@
 | [REQ-0007](REQ-0007-safe-consensus-clustering-and-links-cap.md) | Safe category-isolated consensus clustering & strict 5-link source cap | completed | SLICE-0013 |
 | [REQ-0008](REQ-0008-detail-remove-articles-count-badge.md) | Remove article count badge from related articles section in detail page | completed | SLICE-0014 |
 | [REQ-0009](REQ-0009-detail-deep-dive-ui-copy-refinement.md) | Detail page deep-dive section UI copy refinement & tag removal | completed | SLICE-0015 |
-| [REQ-0010](REQ-0010-index-remove-category-count-badge.md) | Remove article count badge from category selection area in main page | captured | SLICE-0016 |
+| [REQ-0010](REQ-0010-index-remove-category-count-badge.md) | Remove article count badge from category selection area in main page | completed | SLICE-0016 |
+| [REQ-0011](REQ-0011-detail-related-links-title-clean.md) | Clean related link titles and strip leading bracketed prefixes in detail page | completed | SLICE-0017 |

@@ -18,3 +18,4 @@
 | [SLICE-0014](SLICE-0014-detail-remove-articles-count-badge.md) | Remove article count badge from related articles section in detail page | completed | [REQ-0008](../requirements/REQ-0008-detail-remove-articles-count-badge.md) | Closed |
 | [SLICE-0015](SLICE-0015-detail-deep-dive-ui-copy-refinement.md) | Detail page deep-dive section UI copy refinement & tag removal | completed | [REQ-0009](../requirements/REQ-0009-detail-deep-dive-ui-copy-refinement.md) | Closed |
 | [SLICE-0016](SLICE-0016-index-remove-category-count-badge.md) | Remove article count badge from category selection area in main page | completed | [REQ-0010](../requirements/REQ-0010-index-remove-category-count-badge.md) | Closed |
+| [SLICE-0017](SLICE-0017-detail-related-links-title-clean.md) | Detail related links title clean & sanitization | completed | [REQ-0011](../requirements/REQ-0011-detail-related-links-title-clean.md) | Closed |
