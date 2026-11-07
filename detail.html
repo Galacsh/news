@@ -265,40 +265,56 @@
             // Outlet name extraction helper
             function getOutletName(link) {
                 if (!link) return "언론사";
-                if (link.outlet) return link.outlet;
-                if (link.press) return link.press;
-                if (link.title) {
-                    const match = link.title.match(/^\[([^\]]+)\]/);
-                    if (match) return match[1];
-                }
-                if (link.url) {
+                let rawOutlet = link.outlet || link.press;
+                if (!rawOutlet && link.url) {
                     try {
                         const parsed = new URL(link.url);
                         const host = parsed.hostname;
-                        if (host.includes("yna.co.kr")) return "연합뉴스";
-                        if (host.includes("donga.com")) return "동아일보";
-                        if (host.includes("chosun.com")) return "조선일보";
-                        if (host.includes("hani.co.kr")) return "한겨레";
-                        if (host.includes("khan.co.kr")) return "경향신문";
-                        if (host.includes("bloter.net")) return "블로터";
-                        if (host.includes("hankyung.com")) return "한국경제";
-                        if (host.includes("mk.co.kr")) return "매일경제";
-                        if (host.includes("sedaily.com")) return "서울경제";
-                        if (host.includes("etnews.com")) return "전자신문";
-                        if (host.includes("zdnet.co.kr")) return "ZDNet Korea";
-                        if (host.includes("news1.kr")) return "뉴스1";
-                        if (host.includes("newsis.com")) return "뉴시스";
-                        if (host.includes("kbs.co.kr")) return "KBS";
-                        if (host.includes("mbc.co.kr") || host.includes("imnews.imbc.com")) return "MBC";
-                        if (host.includes("sbs.co.kr")) return "SBS";
-                        if (host.includes("ytn.co.kr")) return "YTN";
-                        if (host.includes("jtbc.co.kr")) return "JTBC";
-                        return host.replace(/^www\./, "");
+                        if (host.includes("yna.co.kr")) rawOutlet = "연합뉴스";
+                        else if (host.includes("donga.com")) rawOutlet = "동아일보";
+                        else if (host.includes("chosun.com")) rawOutlet = "조선일보";
+                        else if (host.includes("hani.co.kr")) rawOutlet = "한겨레";
+                        else if (host.includes("khan.co.kr")) rawOutlet = "경향신문";
+                        else if (host.includes("bloter.net")) rawOutlet = "블로터";
+                        else if (host.includes("hankyung.com")) rawOutlet = "한국경제";
+                        else if (host.includes("mk.co.kr")) rawOutlet = "매일경제";
+                        else if (host.includes("sedaily.com")) rawOutlet = "서울경제";
+                        else if (host.includes("etnews.com")) rawOutlet = "전자신문";
+                        else if (host.includes("zdnet.co.kr")) rawOutlet = "ZDNet Korea";
+                        else if (host.includes("news1.kr")) rawOutlet = "뉴스1";
+                        else if (host.includes("newsis.com")) rawOutlet = "뉴시스";
+                        else if (host.includes("kbs.co.kr")) rawOutlet = "KBS";
+                        else if (host.includes("mbc.co.kr") || host.includes("imnews.imbc.com")) rawOutlet = "MBC";
+                        else if (host.includes("sbs.co.kr")) rawOutlet = "SBS";
+                        else if (host.includes("ytn.co.kr")) rawOutlet = "YTN";
+                        else if (host.includes("jtbc.co.kr")) rawOutlet = "JTBC";
                     } catch {
                         // ignore url parse error
                     }
                 }
-                return "언론사 보도";
+                if (!rawOutlet && link.title) {
+                    const match = link.title.match(/^\[([^\]]+)\]/);
+                    if (match) {
+                        const candidate = match[1].trim();
+                        const nonOutlets = ["속보", "단독", "종합", "포토", "영상", "인사", "부고", "현장"];
+                        if (!nonOutlets.includes(candidate)) {
+                            rawOutlet = candidate;
+                        }
+                    }
+                }
+                if (!rawOutlet && link.url) {
+                    try {
+                        const parsed = new URL(link.url);
+                        rawOutlet = parsed.hostname.replace(/^www\./, "");
+                    } catch {
+                        // ignore
+                    }
+                }
+                if (!rawOutlet) return "언론사 보도";
+                if (rawOutlet.includes(" - ")) {
+                    rawOutlet = rawOutlet.split(" - ")[0].trim();
+                }
+                return rawOutlet || "언론사 보도";
             }
 
             function escapeHtml(text) {
@@ -459,7 +475,12 @@
                             linksList.innerHTML = links
                                 .map((link) => {
                                     const outlet = escapeHtml(getOutletName(link));
-                                    const title = escapeHtml(link.title || "원문 기사");
+                                    let rawTitle = (link.title || "원문 기사").trim();
+                                    // Strip leading bracketed prefixes (e.g. [한겨레], [속보], [한국경제 - 라이프])
+                                    rawTitle = rawTitle.replace(/^(?:\[[^\]]+\]\s*)+/, "").trim();
+                                    // Strip leading outlet prefix with hyphen if present (e.g. "한국경제 - ")
+                                    rawTitle = rawTitle.replace(/^[^\s]+ - \s*/, "").trim();
+                                    const title = escapeHtml(rawTitle || link.title || "원문 기사");
                                     const url = escapeHtml(link.url || "#");
                                     return `
                                     <li class="bg-slate-950/60 border border-slate-800 hover:border-sky-500/60 rounded-xl p-4 transition group shadow-sm">
