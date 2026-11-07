@@ -341,6 +341,38 @@
                 return `${year}년 ${month}월 ${day}일 ${hours}시 ${minutes}분 발행`;
             }
 
+            // Deep dive section label normalizer to keep subheadings short and concise
+            function formatDeepDiveLabel(label) {
+                if (!label) return "심층 분석";
+                const clean = String(label).trim();
+                const LABEL_MAP = {
+                    "왜 지금 나왔나 (숨은 셈법)": "의도",
+                    "실제 통과·시행 가능성과 효력": "실현 가능성",
+                    "지표·발표 이면의 맹점": "맹점",
+                    "금리·물가·내 지갑에 미치는 영향": "파급 영향",
+                    "홍보 거품 걷어낸 실제 현황": "실제 현황",
+                    "웃는 기업(수혜) vs 우는 기업(피해)": "수혜와 피해",
+                    "사안의 구조적 배경": "구조적 배경",
+                    "시민이 챙겨야 할 실질적 체크포인트": "체크포인트",
+                    "글로벌 갈등·사건의 본질": "사건의 본질",
+                    "한국 수출·환율·산업에 미칠 손익": "국내 손익",
+                    "마케팅 빼고 진짜 바뀐 기술 본질": "본질",
+                    "개발자·실무·생태계 판도 변화": "판도 변화",
+                    "기존 서비스 대비 핵심 차이점": "핵심 차이점",
+                    "소비자·통신·IT 업계 체감 변화": "체감 변화",
+                    "기록·트렌드의 산업적 의미": "산업적 의미",
+                    "향후 일정 및 핵심 관전 포인트": "관전 포인트",
+                    "결정적 승부처와 기록의 의미": "승부처",
+                    "다음 경기 일정 및 관전 포인트": "관전 포인트",
+                    "트렌드·연구 결과의 팩트 체크": "팩트 체크",
+                    "일상에서 바로 적용할 행동 요령": "행동 요령"
+                };
+                if (LABEL_MAP[clean]) return LABEL_MAP[clean];
+                if (clean.includes("기술 본질")) return "본질";
+                if (clean.includes("판도 변화")) return "판도 변화";
+                return clean;
+            }
+
             async function loadDetail() {
                 const loadingState = document.getElementById("loadingState");
                 const errorState = document.getElementById("errorState");
@@ -453,7 +485,7 @@
                                     <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 sm:p-5 space-y-2">
                                         <div class="flex items-center gap-2">
                                             <span class="w-5 h-5 rounded-md bg-sky-500/20 text-sky-400 font-bold flex items-center justify-center text-xs shrink-0">${idx + 1}</span>
-                                            <h3 class="text-sm sm:text-base font-bold text-sky-300">${escapeHtml(sec.label)}</h3>
+                                            <h3 class="text-sm sm:text-base font-bold text-sky-300">${escapeHtml(formatDeepDiveLabel(sec.label))}</h3>
                                         </div>
                                         <p class="text-xs sm:text-sm text-slate-300 leading-relaxed pl-7 break-keep">${escapeHtml(sec.content)}</p>
                                     </div>
