@@ -1,0 +1,457 @@
+{
+  "timestamp": "2026-11-12T02:36:54.756858+00:00",
+  "date": "2026-11-12",
+  "feeds_attempted": 48,
+  "feeds_failed": 0,
+  "raw_articles_count": 2605,
+  "filtered_count": 80,
+  "gemini_latency_ms": 339014.05,
+  "gemini_fallback_used": false,
+  "category_breakdown": {
+    "정치": 8,
+    "경제·금융": 8,
+    "산업·기업": 8,
+    "사회": 8,
+    "국제·글로벌": 8,
+    "AI·빅테크": 8,
+    "IT·통신": 8,
+    "문화·콘텐츠": 8,
+    "스포츠": 8,
+    "라이프스타일": 8
+  },
+  "feed_status": [
+    {
+      "outlet": "매일경제 - 정치",
+      "url": "https://www.mk.co.kr/rss/30200030/",
+      "category": "정치",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 269.33,
+      "error": null
+    },
+    {
+      "outlet": "SBS - 정치",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=01",
+      "category": "정치",
+      "status": "success",
+      "articles_count": 29,
+      "latency_ms": 948.97,
+      "error": null
+    },
+    {
+      "outlet": "연합뉴스 - 정치",
+      "url": "https://www.yna.co.kr/rss/politics.xml",
+      "category": "정치",
+      "status": "success",
+      "articles_count": 120,
+      "latency_ms": 1003.33,
+      "error": null
+    },
+    {
+      "outlet": "동아일보 - 정치",
+      "url": "https://rss.donga.com/politics.xml",
+      "category": "정치",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 1138.13,
+      "error": null
+    },
+    {
+      "outlet": "한국경제 - 경제",
+      "url": "https://www.hankyung.com/feed/economy",
+      "category": "경제·금융",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 206.73,
+      "error": null
+    },
+    {
+      "outlet": "매일경제 - 경제",
+      "url": "https://www.mk.co.kr/rss/30100041/",
+      "category": "경제·금융",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 243.78,
+      "error": null
+    },
+    {
+      "outlet": "MBN - 정치",
+      "url": "https://www.mbn.co.kr/rss/politics/",
+      "category": "정치",
+      "status": "success",
+      "articles_count": 30,
+      "latency_ms": 1168.26,
+      "error": null
+    },
+    {
+      "outlet": "한겨레 - 정치",
+      "url": "https://www.hani.co.kr/rss/politics/",
+      "category": "정치",
+      "status": "success",
+      "articles_count": 30,
+      "latency_ms": 1756.35,
+      "error": null
+    },
+    {
+      "outlet": "연합뉴스 - 경제",
+      "url": "https://www.yna.co.kr/rss/economy.xml",
+      "category": "경제·금융",
+      "status": "success",
+      "articles_count": 120,
+      "latency_ms": 927.79,
+      "error": null
+    },
+    {
+      "outlet": "동아일보 - 경제",
+      "url": "https://rss.donga.com/economy.xml",
+      "category": "경제·금융",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 1032.8,
+      "error": null
+    },
+    {
+      "outlet": "한국경제 - 금융·증권",
+      "url": "https://www.hankyung.com/feed/finance",
+      "category": "산업·기업",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 116.64,
+      "error": null
+    },
+    {
+      "outlet": "SBS - 경제",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=02",
+      "category": "경제·금융",
+      "status": "success",
+      "articles_count": 29,
+      "latency_ms": 946.97,
+      "error": null
+    },
+    {
+      "outlet": "한겨레 - 경제",
+      "url": "https://www.hani.co.kr/rss/economy/",
+      "category": "경제·금융",
+      "status": "success",
+      "articles_count": 30,
+      "latency_ms": 1078.8,
+      "error": null
+    },
+    {
+      "outlet": "매일경제 - 기업경영",
+      "url": "https://www.mk.co.kr/rss/50100032/",
+      "category": "산업·기업",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 240.94,
+      "error": null
+    },
+    {
+      "outlet": "MBN - 경제",
+      "url": "https://www.mbn.co.kr/rss/economy/",
+      "category": "경제·금융",
+      "status": "success",
+      "articles_count": 30,
+      "latency_ms": 1004.53,
+      "error": null
+    },
+    {
+      "outlet": "연합뉴스 - 산업",
+      "url": "https://www.yna.co.kr/rss/industry.xml",
+      "category": "산업·기업",
+      "status": "success",
+      "articles_count": 120,
+      "latency_ms": 926.85,
+      "error": null
+    },
+    {
+      "outlet": "매일경제 - 사회",
+      "url": "https://www.mk.co.kr/rss/50400012/",
+      "category": "사회",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 244.9,
+      "error": null
+    },
+    {
+      "outlet": "연합뉴스 - 사회",
+      "url": "https://www.yna.co.kr/rss/society.xml",
+      "category": "사회",
+      "status": "success",
+      "articles_count": 120,
+      "latency_ms": 931.41,
+      "error": null
+    },
+    {
+      "outlet": "동아일보 - 사회",
+      "url": "https://rss.donga.com/national.xml",
+      "category": "사회",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 922.11,
+      "error": null
+    },
+    {
+      "outlet": "한겨레 - 사회",
+      "url": "https://www.hani.co.kr/rss/society/",
+      "category": "사회",
+      "status": "success",
+      "articles_count": 30,
+      "latency_ms": 846.03,
+      "error": null
+    },
+    {
+      "outlet": "SBS - 사회",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=03",
+      "category": "사회",
+      "status": "success",
+      "articles_count": 29,
+      "latency_ms": 903.77,
+      "error": null
+    },
+    {
+      "outlet": "매일경제 - 국제",
+      "url": "https://www.mk.co.kr/rss/30300018/",
+      "category": "국제·글로벌",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 257.7,
+      "error": null
+    },
+    {
+      "outlet": "동아일보 - 국제",
+      "url": "https://rss.donga.com/international.xml",
+      "category": "국제·글로벌",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 1063.39,
+      "error": null
+    },
+    {
+      "outlet": "연합뉴스 - 국제",
+      "url": "https://www.yna.co.kr/rss/international.xml",
+      "category": "국제·글로벌",
+      "status": "success",
+      "articles_count": 120,
+      "latency_ms": 1302.4,
+      "error": null
+    },
+    {
+      "outlet": "한겨레 - 국제",
+      "url": "https://www.hani.co.kr/rss/international/",
+      "category": "국제·글로벌",
+      "status": "success",
+      "articles_count": 30,
+      "latency_ms": 949.12,
+      "error": null
+    },
+    {
+      "outlet": "노컷뉴스 - 사회",
+      "url": "https://rss.nocutnews.co.kr/nocutnews.xml",
+      "category": "사회",
+      "status": "success",
+      "articles_count": 21,
+      "latency_ms": 1836.57,
+      "error": null
+    },
+    {
+      "outlet": "SBS - 국제",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=08",
+      "category": "국제·글로벌",
+      "status": "success",
+      "articles_count": 29,
+      "latency_ms": 956.95,
+      "error": null
+    },
+    {
+      "outlet": "MIT Tech Review - AI",
+      "url": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+      "category": "AI·빅테크",
+      "status": "success",
+      "articles_count": 10,
+      "latency_ms": 250.06,
+      "error": null
+    },
+    {
+      "outlet": "한국경제 - IT",
+      "url": "https://www.hankyung.com/feed/it",
+      "category": "IT·통신",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 220.1,
+      "error": null
+    },
+    {
+      "outlet": "GeekNews - AI/개발",
+      "url": "https://news.hada.io/rss/news",
+      "category": "AI·빅테크",
+      "status": "success",
+      "articles_count": 20,
+      "latency_ms": 617.36,
+      "error": null
+    },
+    {
+      "outlet": "AI타임스 - 전체",
+      "url": "https://www.aitimes.com/rss/allArticle.xml",
+      "category": "AI·빅테크",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 954.14,
+      "error": null
+    },
+    {
+      "outlet": "전자신문 - IT·과학",
+      "url": "https://rss.etnews.com/Section901.xml",
+      "category": "IT·통신",
+      "status": "success",
+      "articles_count": 30,
+      "latency_ms": 672.78,
+      "error": null
+    },
+    {
+      "outlet": "매일경제 - IT",
+      "url": "https://www.mk.co.kr/rss/50300009/",
+      "category": "IT·통신",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 239.27,
+      "error": null
+    },
+    {
+      "outlet": "동아일보 - IT의학",
+      "url": "https://rss.donga.com/science.xml",
+      "category": "IT·통신",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 661.41,
+      "error": null
+    },
+    {
+      "outlet": "매일경제 - 문화/연예",
+      "url": "https://www.mk.co.kr/rss/30000023/",
+      "category": "문화·콘텐츠",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 250.8,
+      "error": null
+    },
+    {
+      "outlet": "SBS - 연예/문화",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=07",
+      "category": "문화·콘텐츠",
+      "status": "success",
+      "articles_count": 29,
+      "latency_ms": 441.93,
+      "error": null
+    },
+    {
+      "outlet": "동아일보 - 문화",
+      "url": "https://rss.donga.com/culture.xml",
+      "category": "문화·콘텐츠",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 937.01,
+      "error": null
+    },
+    {
+      "outlet": "연합뉴스 - 문화",
+      "url": "https://www.yna.co.kr/rss/culture.xml",
+      "category": "문화·콘텐츠",
+      "status": "success",
+      "articles_count": 120,
+      "latency_ms": 1183.01,
+      "error": null
+    },
+    {
+      "outlet": "한겨레 - 문화",
+      "url": "https://www.hani.co.kr/rss/culture/",
+      "category": "문화·콘텐츠",
+      "status": "success",
+      "articles_count": 30,
+      "latency_ms": 883.28,
+      "error": null
+    },
+    {
+      "outlet": "지디넷코리아 - AI/IT",
+      "url": "https://zdnet.co.kr/feed/",
+      "category": "AI·빅테크",
+      "status": "success",
+      "articles_count": 30,
+      "latency_ms": 2329.67,
+      "error": null
+    },
+    {
+      "outlet": "SBS - 스포츠",
+      "url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=09",
+      "category": "스포츠",
+      "status": "success",
+      "articles_count": 29,
+      "latency_ms": 455.48,
+      "error": null
+    },
+    {
+      "outlet": "연합뉴스 - 스포츠",
+      "url": "https://www.yna.co.kr/rss/sports.xml",
+      "category": "스포츠",
+      "status": "success",
+      "articles_count": 120,
+      "latency_ms": 891.24,
+      "error": null
+    },
+    {
+      "outlet": "한국경제 - 라이프",
+      "url": "https://www.hankyung.com/feed/life",
+      "category": "라이프스타일",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 229.3,
+      "error": null
+    },
+    {
+      "outlet": "동아일보 - 스포츠",
+      "url": "https://rss.donga.com/sports.xml",
+      "category": "스포츠",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 926.8,
+      "error": null
+    },
+    {
+      "outlet": "연합뉴스 - 건강",
+      "url": "https://www.yna.co.kr/rss/health.xml",
+      "category": "라이프스타일",
+      "status": "success",
+      "articles_count": 120,
+      "latency_ms": 832.4,
+      "error": null
+    },
+    {
+      "outlet": "동아일보 - 라이프",
+      "url": "https://rss.donga.com/lifeinfo.xml",
+      "category": "라이프스타일",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 821.25,
+      "error": null
+    },
+    {
+      "outlet": "동아일보 - 건강",
+      "url": "https://rss.donga.com/health.xml",
+      "category": "라이프스타일",
+      "status": "success",
+      "articles_count": 50,
+      "latency_ms": 924.75,
+      "error": null
+    },
+    {
+      "outlet": "일간스포츠 - 스포츠",
+      "url": "http://isplus.joins.com/rss/",
+      "category": "스포츠",
+      "status": "success",
+      "articles_count": 100,
+      "latency_ms": 1950.51,
+      "error": null
+    }
+  ],
+  "pipeline_latency_ms": 399848.03
+}
